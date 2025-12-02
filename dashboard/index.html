@@ -1,0 +1,1036 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FCAPS SNMP Dashboard</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+        background: #0b1437;
+        color: #fff;
+        padding: 0;
+        min-height: 100vh;
+      }
+
+      .container {
+        max-width: 100%;
+        padding: 0;
+      }
+
+      header {
+        background: #1a2332;
+        padding: 12px 20px;
+        border-bottom: 1px solid #2a3650;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .header-left {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+      }
+
+      .logo {
+        font-size: 20px;
+        font-weight: 600;
+        color: #fff;
+      }
+
+      .dashboard-title {
+        color: #8b98b8;
+        font-size: 14px;
+      }
+
+      .header-right {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+      }
+
+      .time-selector {
+        background: #2a3650;
+        border: 1px solid #3a4660;
+        color: #fff;
+        padding: 6px 12px;
+        border-radius: 4px;
+        font-size: 13px;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+
+      .time-selector:hover {
+        background: #3a4660;
+      }
+
+      .time-menu-item {
+        padding: 8px 12px;
+        font-size: 12px;
+        color: #fff;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+
+      .time-menu-item:hover {
+        background: #2a3650;
+      }
+
+      .time-menu-item.selected {
+        background: #3a4660;
+        color: #2ecc71;
+      }
+
+      .refresh-btn {
+        background: #2a3650;
+        border: 1px solid #3a4660;
+        color: #fff;
+        padding: 6px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 13px;
+        transition: background 0.2s;
+      }
+
+      .refresh-btn:hover {
+        background: #3a4660;
+      }
+
+      .last-update {
+        color: #8b98b8;
+        font-size: 12px;
+      }
+
+      .dashboard-content {
+        padding: 20px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 15px;
+        margin-bottom: 15px;
+      }
+
+      @media (max-width: 1200px) {
+        .grid {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+
+      @media (max-width: 768px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .card {
+        background: #1a2332;
+        border: 1px solid #2a3650;
+        border-radius: 4px;
+        padding: 15px;
+        transition: border-color 0.2s;
+      }
+
+      .card:hover {
+        border-color: #3a4660;
+      }
+
+      .card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #2a3650;
+      }
+
+      .host-name {
+        font-size: 15px;
+        font-weight: 600;
+        color: #fff;
+      }
+
+      .host-badge {
+        padding: 3px 8px;
+        border-radius: 3px;
+        font-size: 11px;
+        font-weight: 500;
+        background: #2ecc71;
+        color: #fff;
+      }
+
+      .badge-problem {
+        background: #e74c3c;
+      }
+
+      .badge-warning {
+        background: #f39c12;
+      }
+
+      .metric-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 6px 0;
+        font-size: 13px;
+      }
+
+      .metric-label {
+        color: #8b98b8;
+        font-size: 12px;
+      }
+
+      .metric-value {
+        font-size: 14px;
+        font-weight: 600;
+        color: #fff;
+      }
+
+      .metric-value.ok {
+        color: #2ecc71;
+      }
+
+      .metric-value.warning {
+        color: #f39c12;
+      }
+
+      .metric-value.critical {
+        color: #e74c3c;
+      }
+
+      .progress-bar {
+        width: 100%;
+        height: 4px;
+        background: #2a3650;
+        border-radius: 2px;
+        overflow: hidden;
+        margin-top: 4px;
+      }
+
+      .progress-fill {
+        height: 100%;
+        transition: width 0.3s ease;
+      }
+
+      .progress-low {
+        background: #2ecc71;
+      }
+      .progress-medium {
+        background: #f39c12;
+      }
+      .progress-high {
+        background: #e74c3c;
+      }
+
+      .chart-container {
+        background: #1a2332;
+        border: 1px solid #2a3650;
+        border-radius: 4px;
+        padding: 15px;
+        margin-bottom: 15px;
+      }
+
+      .chart-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+      }
+
+      .chart-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: #fff;
+      }
+
+      .chart-legend {
+        display: flex;
+        gap: 15px;
+        font-size: 11px;
+      }
+
+      .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        color: #8b98b8;
+      }
+
+      .legend-color {
+        width: 12px;
+        height: 12px;
+        border-radius: 2px;
+      }
+
+      .error-message {
+        background: #2c1f1f;
+        color: #e74c3c;
+        padding: 12px;
+        border-radius: 4px;
+        border: 1px solid #e74c3c;
+        margin: 15px;
+        display: none;
+        font-size: 13px;
+      }
+
+      .loading {
+        text-align: center;
+        padding: 40px;
+        color: #8b98b8;
+        font-size: 14px;
+      }
+
+      canvas {
+        max-height: 250px;
+      }
+
+      .info-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+        margin-top: 10px;
+      }
+
+      .info-item {
+        background: #0f1829;
+        padding: 8px;
+        border-radius: 3px;
+      }
+
+      .info-label {
+        font-size: 11px;
+        color: #8b98b8;
+        margin-bottom: 3px;
+      }
+
+      .info-value {
+        font-size: 13px;
+        font-weight: 600;
+        color: #fff;
+      }
+
+      .stats-bar {
+        display: flex;
+        gap: 20px;
+        padding: 15px 20px;
+        background: #1a2332;
+        border-top: 1px solid #2a3650;
+        border-bottom: 1px solid #2a3650;
+        margin-bottom: 15px;
+      }
+
+      .stat-item {
+        flex: 1;
+      }
+
+      .stat-label {
+        font-size: 11px;
+        color: #8b98b8;
+        margin-bottom: 4px;
+      }
+
+      .stat-value {
+        font-size: 20px;
+        font-weight: 600;
+        color: #fff;
+      }
+
+      .stat-value.ok {
+        color: #2ecc71;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <div class="header-left">
+          <div class="logo">📊 FCAPS</div>
+          <div class="dashboard-title">Dashboard: SNMP Monitoring</div>
+        </div>
+        <div class="header-right">
+          <div style="position: relative">
+            <button
+              class="time-selector"
+              id="timeRangeBtn"
+              onclick="toggleTimeMenu()"
+            >
+              <span id="currentTimeRange">Last 1 hour</span> ▼
+            </button>
+            <div
+              id="timeMenu"
+              style="
+                display: none;
+                position: absolute;
+                top: 100%;
+                right: 0;
+                background: #1a2332;
+                border: 1px solid #2a3650;
+                border-radius: 4px;
+                margin-top: 5px;
+                min-width: 200px;
+                z-index: 1000;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+              "
+            >
+              <div
+                style="display: grid; grid-template-columns: 1fr 1fr; gap: 0"
+              >
+                <div style="border-right: 1px solid #2a3650">
+                  <div
+                    class="time-menu-item"
+                    onclick="selectTimeRange('5m', 'Last 5 minutes')"
+                  >
+                    Last 5 minutes
+                  </div>
+                  <div
+                    class="time-menu-item"
+                    onclick="selectTimeRange('15m', 'Last 15 minutes')"
+                  >
+                    Last 15 minutes
+                  </div>
+                  <div
+                    class="time-menu-item"
+                    onclick="selectTimeRange('30m', 'Last 30 minutes')"
+                  >
+                    Last 30 minutes
+                  </div>
+                  <div
+                    class="time-menu-item selected"
+                    onclick="selectTimeRange('1h', 'Last 1 hour')"
+                  >
+                    Last 1 hour
+                  </div>
+                  <div
+                    class="time-menu-item"
+                    onclick="selectTimeRange('3h', 'Last 3 hours')"
+                  >
+                    Last 3 hours
+                  </div>
+                  <div
+                    class="time-menu-item"
+                    onclick="selectTimeRange('6h', 'Last 6 hours')"
+                  >
+                    Last 6 hours
+                  </div>
+                  <div
+                    class="time-menu-item"
+                    onclick="selectTimeRange('12h', 'Last 12 hours')"
+                  >
+                    Last 12 hours
+                  </div>
+                  <div
+                    class="time-menu-item"
+                    onclick="selectTimeRange('24h', 'Last 1 day')"
+                  >
+                    Last 1 day
+                  </div>
+                </div>
+                <div>
+                  <div
+                    class="time-menu-item"
+                    onclick="selectTimeRange('2d', 'Last 2 days')"
+                  >
+                    Last 2 days
+                  </div>
+                  <div
+                    class="time-menu-item"
+                    onclick="selectTimeRange('7d', 'Last 7 days')"
+                  >
+                    Last 7 days
+                  </div>
+                  <div
+                    class="time-menu-item"
+                    onclick="selectTimeRange('30d', 'Last 30 days')"
+                  >
+                    Last 30 days
+                  </div>
+                  <div
+                    class="time-menu-item"
+                    onclick="selectTimeRange('3mo', 'Last 3 months')"
+                  >
+                    Last 3 months
+                  </div>
+                  <div
+                    class="time-menu-item"
+                    onclick="selectTimeRange('6mo', 'Last 6 months')"
+                  >
+                    Last 6 months
+                  </div>
+                  <div
+                    class="time-menu-item"
+                    onclick="selectTimeRange('1y', 'Last 1 year')"
+                  >
+                    Last 1 year
+                  </div>
+                  <div
+                    class="time-menu-item"
+                    onclick="selectTimeRange('2y', 'Last 2 years')"
+                  >
+                    Last 2 years
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <button class="refresh-btn" onclick="loadData()">🔄 Refresh</button>
+          <div class="last-update" id="lastUpdate">Loading...</div>
+        </div>
+      </header>
+
+      <div class="error-message" id="errorMessage"></div>
+
+      <div class="loading" id="loading">Loading monitoring data...</div>
+
+      <div id="dashboard" style="display: none">
+        <div class="dashboard-content">
+          <!-- Stats Bar -->
+          <div class="stats-bar">
+            <div class="stat-item">
+              <div class="stat-label">HOSTS MONITORED</div>
+              <div class="stat-value ok" id="hostsTotal">3</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-label">PROBLEMS</div>
+              <div class="stat-value" id="problemsTotal">0</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-label">AVG CPU LOAD</div>
+              <div class="stat-value" id="avgCpu">0%</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-label">AVG MEMORY</div>
+              <div class="stat-value" id="avgMemory">0%</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-label">SNMP PROTOCOL</div>
+              <div class="stat-value ok">v2c</div>
+            </div>
+          </div>
+
+          <!-- Charts -->
+          <div class="chart-container">
+            <div class="chart-header">
+              <div class="chart-title">
+                CPU utilization - Carga do processador
+              </div>
+              <div class="chart-legend" id="cpuLegend"></div>
+            </div>
+            <canvas id="cpuChart" style="height: 200px"></canvas>
+          </div>
+
+          <div class="chart-container">
+            <div class="chart-header">
+              <div class="chart-title">Memory utilization - Uso de memória</div>
+              <div class="chart-legend" id="memoryLegend"></div>
+            </div>
+            <canvas id="memoryChart" style="height: 200px"></canvas>
+          </div>
+
+          <!-- Host Cards -->
+          <div class="grid" id="hostsGrid"></div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+      const SNMP_API_URL = "http://localhost:8090/api";
+      let cpuChart = null;
+      let memoryChart = null;
+      let currentTimeRange = "1h";
+      let currentTimeLabel = "Last 1 hour";
+
+      function toggleTimeMenu() {
+        const menu = document.getElementById("timeMenu");
+        menu.style.display = menu.style.display === "none" ? "block" : "none";
+      }
+
+      function selectTimeRange(range, label) {
+        currentTimeRange = range;
+        currentTimeLabel = label;
+        document.getElementById("currentTimeRange").textContent = label;
+        document.getElementById("timeMenu").style.display = "none";
+
+        document.querySelectorAll(".time-menu-item").forEach((item) => {
+          item.classList.remove("selected");
+        });
+        event.target.classList.add("selected");
+
+        loadData();
+      }
+
+      document.addEventListener("click", function (event) {
+        const menu = document.getElementById("timeMenu");
+        const btn = document.getElementById("timeRangeBtn");
+        if (
+          menu &&
+          btn &&
+          !menu.contains(event.target) &&
+          !btn.contains(event.target)
+        ) {
+          menu.style.display = "none";
+        }
+      });
+
+      function getDataPointsCount() {
+        const ranges = {
+          "5m": 30,
+          "15m": 30,
+          "30m": 30,
+          "1h": 60,
+          "3h": 90,
+          "6h": 120,
+          "12h": 144,
+          "24h": 288,
+          "2d": 192,
+          "7d": 168,
+          "30d": 180,
+          "3mo": 90,
+          "6mo": 180,
+          "1y": 365,
+          "2y": 730,
+        };
+        return ranges[currentTimeRange] || 60;
+      }
+
+      function getTimeInterval() {
+        const intervals = {
+          "5m": 10000,
+          "15m": 30000,
+          "30m": 60000,
+          "1h": 60000,
+          "3h": 120000,
+          "6h": 300000,
+          "12h": 300000,
+          "24h": 300000,
+          "2d": 900000,
+          "7d": 3600000,
+          "30d": 14400000,
+          "3mo": 86400000,
+          "6mo": 86400000,
+          "1y": 86400000,
+          "2y": 172800000,
+        };
+        return intervals[currentTimeRange] || 60000;
+      }
+
+      // Dados SNMP coletados do Zabbix Server
+      const mockData = {
+        hosts: [
+          {
+            hostid: "10502",
+            host: "nginx-web",
+            name: "nginx-web (Container)",
+            cpu: 17,
+            memory: 86,
+            uptime: "0:13:03",
+            processes: 4,
+            load: 0.32,
+            disk: 17,
+            location: "nginx-web-container",
+            contact: "admin@fcaps.local",
+          },
+          {
+            hostid: "10503",
+            host: "python-app",
+            name: "python-app (Container)",
+            cpu: 15,
+            memory: 86,
+            uptime: "0:12:46",
+            processes: 6,
+            load: 0.35,
+            disk: 15,
+            location: "python-app-container",
+            contact: "admin@fcaps.local",
+          },
+          {
+            hostid: "10504",
+            host: "alpine-host",
+            name: "alpine-host (Container)",
+            cpu: 16,
+            memory: 86,
+            uptime: "0:12:38",
+            processes: 6,
+            load: 0.36,
+            disk: 16,
+            location: "alpine-host-container",
+            contact: "admin@fcaps.local",
+          },
+        ],
+      };
+
+      async function getHosts() {
+        try {
+          const response = await fetch(`${SNMP_API_URL}/latest`);
+          const data = await response.json();
+          return data.hosts || [];
+        } catch (error) {
+          console.error("Get hosts error:", error);
+          return [];
+        }
+      }
+
+      async function getHistory(metric) {
+        try {
+          const response = await fetch(
+            `${SNMP_API_URL}/history?range=${currentTimeRange}&metric=${metric}`
+          );
+          const data = await response.json();
+          return data.data || [];
+        } catch (error) {
+          console.error("Get history error:", error);
+          return [];
+        }
+      }
+
+      function parseMetrics(host) {
+        return {
+          hostid: host.host,
+          host: host.host,
+          name: host.host + " (SNMP)",
+          cpu: host.cpu || 0,
+          memory: host.memory || 0,
+          uptime: formatUptime(host.uptime || 0),
+          processes: host.processes || 0,
+          load: 0,
+        };
+      }
+
+      function formatUptime(seconds) {
+        const hours = Math.floor(seconds / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        return `${hours}:${minutes.toString().padStart(2, "0")}`;
+      }
+
+      function getProgressClass(value) {
+        if (value < 50) return "progress-low";
+        if (value < 80) return "progress-medium";
+        return "progress-high";
+      }
+
+      function getBadgeClass(hostName) {
+        if (hostName.includes("nginx")) return "badge-nginx";
+        if (hostName.includes("python")) return "badge-python";
+        return "badge-alpine";
+      }
+
+      function renderHostCard(host) {
+        const cpuClass =
+          host.cpu > 80 ? "critical" : host.cpu > 50 ? "warning" : "ok";
+        const memClass =
+          host.memory > 80 ? "critical" : host.memory > 50 ? "warning" : "ok";
+
+        return `
+                <div class="card">
+                    <div class="card-header">
+                        <div class="host-name">${host.name}</div>
+                        <span class="host-badge">OK</span>
+                    </div>
+                    
+                    <div class="metric-row">
+                        <div class="metric-label">CPU utilization</div>
+                        <div class="metric-value ${cpuClass}">${host.cpu.toFixed(
+          0
+        )}%</div>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill ${getProgressClass(
+                          host.cpu
+                        )}" style="width: ${host.cpu}%"></div>
+                    </div>
+
+                    <div class="metric-row" style="margin-top: 8px;">
+                        <div class="metric-label">Memory utilization</div>
+                        <div class="metric-value ${memClass}">${host.memory.toFixed(
+          0
+        )}%</div>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill ${getProgressClass(
+                          host.memory
+                        )}" style="width: ${host.memory}%"></div>
+                    </div>
+
+                    <div class="info-grid" style="margin-top: 12px;">
+                        <div class="info-item">
+                            <div class="info-label">Uptime</div>
+                            <div class="info-value">${host.uptime}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Processes</div>
+                            <div class="info-value">${host.processes}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Load avg</div>
+                            <div class="info-value">${host.load.toFixed(
+                              2
+                            )}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">SNMP Status</div>
+                            <div class="info-value" style="color: #2ecc71;">Active</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+      }
+
+      async function createCharts(hosts) {
+        const colors = ["#2ecc71", "#3498db", "#9b59b6"];
+
+        // Buscar dados históricos reais da API
+        const cpuHistory = await getHistory("cpu");
+        const memHistory = await getHistory("memory");
+
+        // Processar dados históricos por host
+        const hostData = {};
+        hosts.forEach((host) => {
+          hostData[host.host] = { cpu: [], memory: [], labels: [] };
+        });
+
+        // Agrupar dados de CPU
+        cpuHistory.forEach((entry) => {
+          if (hostData[entry.host]) {
+            hostData[entry.host].cpu.push(entry.value);
+            const date = new Date(entry.timestamp * 1000);
+            const label =
+              currentTimeRange.includes("d") ||
+              currentTimeRange.includes("mo") ||
+              currentTimeRange.includes("y")
+                ? date.toLocaleDateString("pt-BR", {
+                    day: "2-digit",
+                    month: "2-digit",
+                  })
+                : date.toLocaleTimeString("pt-BR", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  });
+            if (!hostData[entry.host].labels.includes(label)) {
+              hostData[entry.host].labels.push(label);
+            }
+          }
+        });
+
+        // Agrupar dados de Memory
+        memHistory.forEach((entry) => {
+          if (hostData[entry.host]) {
+            hostData[entry.host].memory.push(entry.value);
+          }
+        });
+
+        // Usar labels do primeiro host (todos devem ter os mesmos timestamps)
+        const timeLabels = hostData[hosts[0]?.host]?.labels || [];
+
+        // Criar datasets para CPU
+        const cpuDatasets = hosts.map((host, idx) => {
+          return {
+            label: host.name,
+            data: hostData[host.host]?.cpu || [],
+            borderColor: colors[idx],
+            backgroundColor: "transparent",
+            borderWidth: 2,
+            tension: 0.4,
+            pointRadius: 0,
+            pointHoverRadius: 3,
+            fill: false,
+          };
+        });
+
+        // CPU Chart
+        const cpuCtx = document.getElementById("cpuChart").getContext("2d");
+        if (cpuChart) cpuChart.destroy();
+        cpuChart = new Chart(cpuCtx, {
+          type: "line",
+          data: {
+            labels: timeLabels,
+            datasets: cpuDatasets,
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                mode: "index",
+                intersect: false,
+                backgroundColor: "#1a2332",
+                borderColor: "#2a3650",
+                borderWidth: 1,
+              },
+            },
+            scales: {
+              x: {
+                grid: { color: "#2a3650", drawBorder: false },
+                ticks: {
+                  color: "#8b98b8",
+                  maxTicksLimit: 12,
+                  autoSkip: true,
+                  maxRotation: 0,
+                  minRotation: 0,
+                },
+              },
+              y: {
+                beginAtZero: true,
+                max: 100,
+                grid: { color: "#2a3650", drawBorder: false },
+                ticks: {
+                  color: "#8b98b8",
+                  callback: (value) => value + " %",
+                  stepSize: 20,
+                },
+              },
+            },
+          },
+        });
+
+        // Criar datasets para Memory
+        const memDatasets = hosts.map((host, idx) => {
+          return {
+            label: host.name,
+            data: hostData[host.host]?.memory || [],
+            borderColor: colors[idx],
+            backgroundColor: "transparent",
+            borderWidth: 2,
+            tension: 0.4,
+            pointRadius: 0,
+            pointHoverRadius: 3,
+            fill: false,
+          };
+        });
+
+        // Memory Chart
+        const memCtx = document.getElementById("memoryChart").getContext("2d");
+        if (memoryChart) memoryChart.destroy();
+        memoryChart = new Chart(memCtx, {
+          type: "line",
+          data: {
+            labels: timeLabels,
+            datasets: memDatasets,
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                mode: "index",
+                intersect: false,
+                backgroundColor: "#1a2332",
+                borderColor: "#2a3650",
+                borderWidth: 1,
+              },
+            },
+            scales: {
+              x: {
+                grid: { color: "#2a3650", drawBorder: false },
+                ticks: {
+                  color: "#8b98b8",
+                  maxTicksLimit: 12,
+                  autoSkip: true,
+                  maxRotation: 0,
+                  minRotation: 0,
+                },
+              },
+              y: {
+                beginAtZero: true,
+                max: 100,
+                grid: { color: "#2a3650", drawBorder: false },
+                ticks: {
+                  color: "#8b98b8",
+                  callback: (value) => value + " %",
+                  stepSize: 20,
+                },
+              },
+            },
+          },
+        });
+
+        // Atualizar legendas
+        updateLegends(hosts, colors);
+      }
+
+      function updateLegends(hosts, colors) {
+        const cpuLegend = document.getElementById("cpuLegend");
+        const memoryLegend = document.getElementById("memoryLegend");
+
+        const legendHTML = hosts
+          .map(
+            (host, idx) => `
+          <div class="legend-item">
+            <div class="legend-color" style="background: ${colors[idx]}"></div>
+            <span>${host.name}</span>
+          </div>
+        `
+          )
+          .join("");
+
+        cpuLegend.innerHTML = legendHTML;
+        memoryLegend.innerHTML = legendHTML;
+      }
+
+      async function loadData() {
+        document.getElementById("loading").style.display = "block";
+        document.getElementById("dashboard").style.display = "none";
+        document.getElementById("errorMessage").style.display = "none";
+
+        try {
+          // Buscar dados reais da API SNMP
+          const rawHosts = await getHosts();
+          const hosts = rawHosts.map((h) => parseMetrics(h));
+
+          if (hosts.length === 0) {
+            throw new Error("No hosts found in SNMP database");
+          }
+
+          // Calcular estatísticas
+          const avgCpu = (
+            hosts.reduce((sum, h) => sum + h.cpu, 0) / hosts.length
+          ).toFixed(1);
+          const avgMemory = (
+            hosts.reduce((sum, h) => sum + h.memory, 0) / hosts.length
+          ).toFixed(1);
+          const problems = hosts.filter(
+            (h) => h.cpu > 80 || h.memory > 80
+          ).length;
+
+          document.getElementById("avgCpu").textContent = avgCpu + "%";
+          document.getElementById("avgMemory").textContent = avgMemory + "%";
+          document.getElementById("problemsTotal").textContent = problems;
+          document.getElementById("problemsTotal").className =
+            problems > 0 ? "stat-value critical" : "stat-value ok";
+
+          // Renderizar
+          document.getElementById("hostsGrid").innerHTML = hosts
+            .map((h) => renderHostCard(h))
+            .join("");
+          await createCharts(hosts);
+
+          document.getElementById("lastUpdate").textContent =
+            new Date().toLocaleTimeString("pt-BR");
+          document.getElementById("loading").style.display = "none";
+          document.getElementById("dashboard").style.display = "block";
+        } catch (error) {
+          console.error("Load data error:", error);
+          document.getElementById("loading").style.display = "none";
+          document.getElementById("errorMessage").textContent =
+            "⚠️ Aguardando dados SNMP... O coletor pode estar iniciando pela primeira vez. Atualize a página em alguns segundos.";
+          document.getElementById("errorMessage").style.display = "block";
+        }
+      }
+
+      // Auto-refresh a cada 30 segundos
+      setInterval(loadData, 30000);
+
+      // Carrega dados ao iniciar
+      loadData();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,40 @@
+# Dados do Zabbix
+docker/zabbix/data/
+docker/zabbix/snmptraps/
+
+# Dados da aplicação Python
+docker/monitored-services/python-app/data/*.db
+docker/monitored-services/python-app/data/*.db-journal
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Docker
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# LaTeX
+Template_SBC/template-latex/*.aux
+Template_SBC/template-latex/*.bbl
+Template_SBC/template-latex/*.blg
+Template_SBC/template-latex/*.dvi
+Template_SBC/template-latex/*.log
+Template_SBC/template-latex/*.out
+Template_SBC/template-latex/*.pdf
+Template_SBC/template-latex/*.synctex.gz

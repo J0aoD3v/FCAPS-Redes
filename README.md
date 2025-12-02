@@ -115,3 +115,55 @@ Esta parte serve como roteiro para seguirem na prática.
 Cada grupo deverá entregar um artigo técnico descrevendo o projeto, seguindo o modelo oficial da SBC:
 
 **Template obrigatório:** https://www.sbc.org.br/wp-content/uploads/2024/07/modelosparapublicaodeartigos.zip
+
+---
+
+## 📚 Documentação do Projeto
+
+- [📖 QUICKSTART.md](docs/QUICKSTART.md) - Guia de início rápido
+- [🔧 INSTALACAO.md](docs/INSTALACAO.md) - Guia completo de instalação
+- [📋 PLANEJAMENTO.md](docs/PLANEJAMENTO.md) - Planejamento detalhado do projeto
+- [🔍 ZABBIX-SNMP-COLLECTOR.md](docs/ZABBIX-SNMP-COLLECTOR.md) - Zabbix Server como coletor SNMP
+- [📊 OIDS-METRICAS.md](docs/OIDS-METRICAS.md) - Mapeamento de OIDs e métricas coletadas
+
+---
+
+## 🚀 Implementação
+
+### Tecnologias Utilizadas
+
+- **Zabbix** (SQLite) - Ferramenta de monitoramento
+- **Docker** - Containerização
+- **WSL2** - Ambiente Linux no Windows
+- **Alpine Linux** - Imagens otimizadas
+- **Nginx** - Servidor Web
+- **Python Flask** - Aplicação com SQLite
+
+### Objetos Monitorados
+
+1. **Servidor Web Nginx** (Alpine)
+2. **Aplicação Python + SQLite**
+3. **Host Linux Alpine**
+
+### Início Rápido
+
+**PowerShell (como Admin):**
+
+```powershell
+cd C:\Projetos\FCAPS-Redes
+.\scripts\setup-wsl.ps1
+```
+
+**WSL:**
+
+```bash
+cd /mnt/c/Projetos/FCAPS-Redes
+bash scripts/install-docker.sh
+bash scripts/start-monitoring.sh
+```
+
+**Acessar:**
+
+- Zabbix: http://localhost:8080 (Admin/zabbix)
+- Nginx: http://localhost:8081
+- Python App: http://localhost:5000
