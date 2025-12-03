@@ -445,6 +445,10 @@
           <div class="dashboard-title">Dashboard: SNMP Monitoring</div>
         </div>
         <div class="header-right">
+          <select class="time-selector" id="dataSourceSelector" onchange="changeDataSource()" style="margin-right: 10px;">
+            <option value="http://localhost:8090/api">🖥️ Local PC</option>
+            <option value="http://137.131.133.165:8090/api">☁️ Oracle Cloud</option>
+          </select>
           <div style="position: relative">
             <button
               class="time-selector"
@@ -655,7 +659,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
-      const SNMP_API_URL = "http://localhost:8090/api";
+      let SNMP_API_URL = "http://localhost:8090/api";
       let cpuChart = null;
       let memoryChart = null;
       let uptimeChart = null;
@@ -664,6 +668,21 @@
       let allHosts = [];
       let selectedHosts = new Set();
       let hostColors = {};
+
+      function changeDataSource() {
+        const selector = document.getElementById('dataSourceSelector');
+        SNMP_API_URL = selector.value;
+        localStorage.setItem('fcaps_data_source', SNMP_API_URL);
+        loadData();
+      }
+
+      function loadDataSourcePreference() {
+        const saved = localStorage.getItem('fcaps_data_source');
+        if (saved) {
+          SNMP_API_URL = saved;
+          document.getElementById('dataSourceSelector').value = saved;
+        }
+      }
 
       // Cores padrão para hosts
       const defaultColors = [
@@ -1509,7 +1528,8 @@
       // Auto-refresh a cada 60 segundos (sincronizado com coleta SNMP)
       setInterval(loadData, 60000);
 
-      // Carrega dados ao iniciar
+      // Carrega preferências e dados ao iniciar
+      loadDataSourcePreference();
       loadData();
     </script>
   </body>
