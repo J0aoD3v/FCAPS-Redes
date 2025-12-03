@@ -16,7 +16,7 @@ DB_PATH = '/data/snmp_metrics.db'
 # Hosts acessíveis da nuvem - APENAS remotos e localhost
 HOSTS = [
     {'name': 'snmp-collector-cloud', 'ip': 'localhost', 'community': 'public'},  # Auto-monitoramento
-    {'name': 'api-foda', 'ip': '136.248.121.230', 'community': 'public'}  # Outro servidor Oracle Cloud
+    {'name': 'api-daora', 'ip': '136.248.121.230', 'community': 'public'}  # Outro servidor Oracle Cloud
 ]
 
 # OIDs SNMP (usando OIDs básicos que existem em todos os containers)
