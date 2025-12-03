@@ -685,12 +685,15 @@
 
       function loadDataSourcePreference() {
         // Se estiver no GitHub Pages, desabilitar API externa (Mixed Content)
-        const isGitHubPages = window.location.hostname.includes('github.io');
-        
+        const isGitHubPages = window.location.hostname.includes("github.io");
+
         if (isGitHubPages) {
-          console.warn('GitHub Pages detected - API requests disabled due to Mixed Content policy');
-          document.getElementById('dataSourceSelector').disabled = true;
-          document.getElementById('dataSourceSelector').title = 'API desabilitada no GitHub Pages (Mixed Content)';
+          console.warn(
+            "GitHub Pages detected - API requests disabled due to Mixed Content policy"
+          );
+          document.getElementById("dataSourceSelector").disabled = true;
+          document.getElementById("dataSourceSelector").title =
+            "API desabilitada no GitHub Pages (Mixed Content)";
           return;
         }
 
@@ -860,11 +863,11 @@
           return data.hosts || [];
         } catch (error) {
           console.error("Get hosts error:", error);
-          
+
           // Se falhar (Mixed Content ou offline), usar dados mock
-          const isGitHubPages = window.location.hostname.includes('github.io');
-          if (isGitHubPages || error.message.includes('Failed to fetch')) {
-            console.warn('Using mock data - API unavailable');
+          const isGitHubPages = window.location.hostname.includes("github.io");
+          if (isGitHubPages || error.message.includes("Failed to fetch")) {
+            console.warn("Using mock data - API unavailable");
             return mockData.hosts;
           }
           return [];
@@ -880,10 +883,10 @@
           return data.data || [];
         } catch (error) {
           console.error("Get history error:", error);
-          
+
           // Se falhar, gerar dados mock para o gráfico
-          const isGitHubPages = window.location.hostname.includes('github.io');
-          if (isGitHubPages || error.message.includes('Failed to fetch')) {
+          const isGitHubPages = window.location.hostname.includes("github.io");
+          if (isGitHubPages || error.message.includes("Failed to fetch")) {
             return generateMockHistory(metric);
           }
           return [];
@@ -896,23 +899,23 @@
         const interval = getTimeInterval() / 1000;
         const mockHistory = [];
 
-        mockData.hosts.forEach(host => {
+        mockData.hosts.forEach((host) => {
           for (let i = 0; i < points; i++) {
             const timestamp = now - (points - i) * interval;
             let value;
-            
-            if (metric === 'cpu') {
+
+            if (metric === "cpu") {
               value = host.cpu + (Math.random() * 20 - 10); // ±10% variação
-            } else if (metric === 'memory') {
+            } else if (metric === "memory") {
               value = host.memory + (Math.random() * 10 - 5); // ±5% variação
-            } else if (metric === 'uptime') {
+            } else if (metric === "uptime") {
               value = host.uptimeSeconds || 3600 + i * 60; // crescente
             }
-            
+
             mockHistory.push({
               host: host.host,
               timestamp: timestamp,
-              value: Math.max(0, Math.min(100, value))
+              value: Math.max(0, Math.min(100, value)),
             });
           }
         });

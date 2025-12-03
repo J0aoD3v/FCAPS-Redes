@@ -18,16 +18,39 @@ class APIHandler(BaseHTTPRequestHandler):
         path = parsed_path.path
         params = parse_qs(parsed_path.query)
         
-        # Servir index.html na raiz
+        # Servir index.html na raiz (busca do volume compartilhado)
         if path == '/' or path == '/index.html':
             try:
-                with open('/app/dashboard.html', 'r', encoding='utf-8') as f:
-                    content = f.read()
-                self.send_response(200)
-                self.send_header('Content-type', 'text/html; charset=utf-8')
-                self.send_header('Access-Control-Allow-Origin', '*')
-                self.end_headers()
-                self.wfile.write(content.encode('utf-8'))
+                # Tentar buscar do volume compartilhado ou local
+                index_paths = ['/data/index.html', '/app/index.html', '/tmp/index.html']
+                content = None
+                
+                for index_path in index_paths:
+                    try:
+                        with open(index_path, 'r', encoding='utf-8') as f:
+                            content = f.read()
+                            # Substituir URL da API para usar API relativa
+                            content = content.replace(
+                                'let SNMP_API_URL = "http://localhost:8090/api"',
+                                'let SNMP_API_URL = window.location.origin + "/api"'
+                            )
+                            # Ocultar seletor de fonte quando servido pelo servidor
+                            content = content.replace(
+                                'const saved = localStorage.getItem("fcaps_data_source");',
+                                'document.getElementById("dataSourceSelector").style.display = "none"; return; const saved = localStorage.getItem("fcaps_data_source");'
+                            )
+                            break
+                    except:
+                        continue
+                
+                if content:
+                    self.send_response(200)
+                    self.send_header('Content-type', 'text/html; charset=utf-8')
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.end_headers()
+                    self.wfile.write(content.encode('utf-8'))
+                else:
+                    raise FileNotFoundError("index.html not found in any location")
             except Exception as e:
                 self.send_response(404)
                 self.send_header('Content-type', 'text/plain')
