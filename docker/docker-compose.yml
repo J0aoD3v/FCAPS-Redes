@@ -35,6 +35,7 @@ services:
       - snmp-data:/data
     ports:
       - "8090:8090"  # API REST
+      - "16104:161/udp"  # SNMP
     networks:
       - monitoring-network
     restart: unless-stopped
@@ -44,33 +45,18 @@ services:
       - alpine-host
 
   nginx-web:
-    image: nginx:alpine
+    build:
+      context: ./monitored-services/nginx
+      dockerfile: Dockerfile
     container_name: nginx-web
     mem_limit: 128m
     cpus: 0.5
-    volumes:
-      - ./monitored-services/nginx/html:/usr/share/nginx/html:ro
-      - ./monitored-services/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     ports:
       - "8081:80"
       - "16101:161/udp"  # SNMP
     networks:
       - monitoring-network
     restart: unless-stopped
-    command: >
-      sh -c "apk add --no-cache zabbix-agent2 net-snmp net-snmp-tools && 
-             sed -i 's/Server=127.0.0.1/Server=zabbix-server/g' /etc/zabbix/zabbix_agent2.conf &&
-             sed -i 's/ServerActive=127.0.0.1/ServerActive=zabbix-server/g' /etc/zabbix/zabbix_agent2.conf &&
-             sed -i 's/Hostname=Zabbix server/Hostname=nginx-web/g' /etc/zabbix/zabbix_agent2.conf &&
-             mkdir -p /etc/snmp /var/net-snmp &&
-             echo 'rocommunity public' > /etc/snmp/snmpd.conf &&
-             echo 'agentaddress udp:161' >> /etc/snmp/snmpd.conf &&
-             echo 'sysLocation nginx-web-container' >> /etc/snmp/snmpd.conf &&
-             echo 'sysContact admin@fcaps.local' >> /etc/snmp/snmpd.conf &&
-             /usr/sbin/zabbix_agent2 -c /etc/zabbix/zabbix_agent2.conf &
-             /usr/sbin/snmpd -Lsd -Lf /dev/null -p /var/run/snmpd.pid &
-             sleep 2 &&
-             nginx -g 'daemon off;'"
 
   python-app:
     build:
@@ -87,42 +73,16 @@ services:
     networks:
       - monitoring-network
     restart: unless-stopped
-    command: >
-      sh -c "apk add --no-cache zabbix-agent2 net-snmp net-snmp-tools &&
-             sed -i 's/Server=127.0.0.1/Server=zabbix-server/g' /etc/zabbix/zabbix_agent2.conf &&
-             sed -i 's/ServerActive=127.0.0.1/ServerActive=zabbix-server/g' /etc/zabbix/zabbix_agent2.conf &&
-             sed -i 's/Hostname=Zabbix server/Hostname=python-app/g' /etc/zabbix/zabbix_agent2.conf &&
-             mkdir -p /etc/snmp /var/net-snmp &&
-             echo 'rocommunity public' > /etc/snmp/snmpd.conf &&
-             echo 'agentaddress udp:161' >> /etc/snmp/snmpd.conf &&
-             echo 'sysLocation python-app-container' >> /etc/snmp/snmpd.conf &&
-             echo 'sysContact admin@fcaps.local' >> /etc/snmp/snmpd.conf &&
-             /usr/sbin/zabbix_agent2 -c /etc/zabbix/zabbix_agent2.conf &
-             /usr/sbin/snmpd -Lsd -Lf /dev/null -p /var/run/snmpd.pid &
-             sleep 2 &&
-             python app.py"
 
   alpine-host:
-    image: alpine:latest
+    build:
+      context: ./monitored-services/alpine-host
+      dockerfile: Dockerfile
     container_name: alpine-host
     mem_limit: 128m
     cpus: 0.5
     ports:
       - "16103:161/udp"  # SNMP
-    command: >
-      sh -c "apk add --no-cache sqlite zabbix-agent2 net-snmp net-snmp-tools &&
-             sed -i 's/Server=127.0.0.1/Server=zabbix-server/g' /etc/zabbix/zabbix_agent2.conf &&
-             sed -i 's/ServerActive=127.0.0.1/ServerActive=zabbix-server/g' /etc/zabbix/zabbix_agent2.conf &&
-             sed -i 's/Hostname=Zabbix server/Hostname=alpine-host/g' /etc/zabbix/zabbix_agent2.conf &&
-             mkdir -p /etc/snmp /var/net-snmp &&
-             echo 'rocommunity public' > /etc/snmp/snmpd.conf &&
-             echo 'agentaddress udp:161' >> /etc/snmp/snmpd.conf &&
-             echo 'sysLocation alpine-host-container' >> /etc/snmp/snmpd.conf &&
-             echo 'sysContact admin@fcaps.local' >> /etc/snmp/snmpd.conf &&
-             /usr/sbin/zabbix_agent2 -c /etc/zabbix/zabbix_agent2.conf &
-             /usr/sbin/snmpd -Lsd -Lf /dev/null -p /var/run/snmpd.pid &
-             sleep 2 &&
-             tail -f /dev/null"
     networks:
       - monitoring-network
     restart: unless-stopped

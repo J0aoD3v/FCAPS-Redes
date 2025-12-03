@@ -5,7 +5,10 @@ RUN apk add --no-cache \
     gcc \
     musl-dev \
     linux-headers \
-    sqlite
+    sqlite \
+    net-snmp \
+    net-snmp-tools \
+    zabbix-agent2
 
 WORKDIR /app
 
@@ -19,11 +22,23 @@ RUN apk del gcc musl-dev linux-headers
 # Copiar aplicação
 COPY . .
 
-# Criar diretório para banco de dados
-RUN mkdir -p /app/data
+# Copiar configuração SNMP
+COPY snmpd.conf /etc/snmp/snmpd.conf
 
-# Expor porta
+# Copiar script de entrypoint
+COPY entrypoint.sh /entrypoint.sh
+
+# Criar diretórios necessários
+RUN mkdir -p /app/data /var/net-snmp /var/run
+
+# Configurar permissões
+RUN chmod 644 /etc/snmp/snmpd.conf && \
+    chmod 755 /var/net-snmp && \
+    chmod +x /entrypoint.sh
+
+# Expor portas
 EXPOSE 5000
+EXPOSE 161/udp
 
 # Comando de inicialização
-CMD ["python", "app.py"]
+ENTRYPOINT ["/entrypoint.sh"]

@@ -94,45 +94,84 @@
 
       <div class="metrics">
         <div class="metric">
-          <div class="metric-value" id="uptime">0s</div>
-          <div class="metric-label">Uptime</div>
+          <div class="metric-value" id="uptime">Carregando...</div>
+          <div class="metric-label">Uptime (SNMP)</div>
         </div>
         <div class="metric">
-          <div class="metric-value" id="requests">0</div>
-          <div class="metric-label">Requisições</div>
+          <div class="metric-value" id="cpu">-</div>
+          <div class="metric-label">CPU %</div>
+        </div>
+        <div class="metric">
+          <div class="metric-value" id="memory">-</div>
+          <div class="metric-label">Memória %</div>
+        </div>
+        <div class="metric">
+          <div class="metric-value" id="processes">-</div>
+          <div class="metric-label">Processos</div>
         </div>
       </div>
 
       <div class="info" style="margin-top: 20px">
-        <h2>🔍 Métricas Monitoradas</h2>
-        <p>• Disponibilidade do serviço</p>
-        <p>• Tempo de resposta HTTP</p>
-        <p>• Taxa de requisições/segundo</p>
-        <p>• Erros HTTP (4xx, 5xx)</p>
-        <p>• Conexões ativas</p>
+        <h2>🔍 Métricas Monitoradas via SNMP</h2>
+        <p>• CPU Utilization (HOST-RESOURCES-MIB)</p>
+        <p>• Memory Usage (UCD-SNMP-MIB)</p>
+        <p>• System Uptime (SNMPv2-MIB)</p>
+        <p>• Running Processes (HOST-RESOURCES-MIB)</p>
+        <p>• Protocolo: SNMPv2c</p>
       </div>
     </div>
 
     <script>
-      let startTime = Date.now();
-      let requestCount = 0;
+      const SNMP_API_URL = "http://localhost:8090/api";
+      const HOST_NAME = "nginx-web";
 
-      function updateMetrics() {
-        const uptime = Math.floor((Date.now() - startTime) / 1000);
-        const hours = Math.floor(uptime / 3600);
-        const minutes = Math.floor((uptime % 3600) / 60);
-        const seconds = uptime % 60;
+      function formatUptime(seconds) {
+        const days = Math.floor(seconds / 86400);
+        const hours = Math.floor((seconds % 86400) / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        const secs = seconds % 60;
 
-        document.getElementById(
-          "uptime"
-        ).textContent = `${hours}h ${minutes}m ${seconds}s`;
-
-        requestCount++;
-        document.getElementById("requests").textContent = requestCount;
+        if (days > 0) {
+          return `${days}d ${hours}h ${minutes}m`;
+        } else if (hours > 0) {
+          return `${hours}h ${minutes}m ${secs}s`;
+        } else if (minutes > 0) {
+          return `${minutes}m ${secs}s`;
+        } else {
+          return `${secs}s`;
+        }
       }
 
-      setInterval(updateMetrics, 1000);
-      updateMetrics();
+      async function loadMetrics() {
+        try {
+          const response = await fetch(`${SNMP_API_URL}/latest`);
+          const data = await response.json();
+
+          const host = data.hosts.find((h) => h.host === HOST_NAME);
+
+          if (host) {
+            document.getElementById("uptime").textContent = formatUptime(
+              host.uptime || 0
+            );
+            document.getElementById("cpu").textContent =
+              Math.round(host.cpu || 0) + "%";
+            document.getElementById("memory").textContent =
+              Math.round(host.memory || 0) + "%";
+            document.getElementById("processes").textContent =
+              host.processes || 0;
+          } else {
+            document.getElementById("uptime").textContent =
+              "Host não encontrado";
+          }
+        } catch (error) {
+          console.error("Erro ao carregar métricas:", error);
+          document.getElementById("uptime").textContent = "Erro na API";
+        }
+      }
+
+      // Atualizar a cada 10 segundos (alinhado com coleta SNMP)
+      setInterval(loadMetrics, 10000);
+      loadMetrics();
     </script>
   </body>
 </html>
