@@ -9,9 +9,23 @@ import sqlite3
 from datetime import datetime
 from easysnmp import Session
 import sys
+import shutil
 
-# Configurações
 DB_PATH = '/data/snmp_metrics.db'
+BACKUP_DIR = '/home/opc/snmp-backups/'
+
+def backup_db():
+    """Faz backup do banco de dados SQLite"""
+    try:
+        now = datetime.now().strftime('%Y%m%d_%H%M%S')
+        backup_path = f"{BACKUP_DIR}collector_{now}.db"
+        shutil.copy(DB_PATH, backup_path)
+        # Atualiza o backup atual
+        shutil.copy(DB_PATH, f"{BACKUP_DIR}collector_current.db")
+        print(f"  Backup realizado em {backup_path}")
+    except Exception as e:
+        print(f"  Erro ao fazer backup: {e}")
+
 HOSTS = [
     {'name': 'nginx-web', 'ip': 'nginx-web', 'community': 'public'},
     {'name': 'python-app', 'ip': 'python-app', 'community': 'public'},
@@ -29,6 +43,9 @@ OIDS = {
     'uptime': '.1.3.6.1.2.1.1.3.0',              # sysUpTime
     'sysname': '.1.3.6.1.2.1.1.5.0',             # sysName
     'sysdescr': '.1.3.6.1.2.1.1.1.0',            # sysDescr
+    'ifOperStatus': '.1.3.6.1.2.1.2.2.1.8.1',    # IF-MIB::ifOperStatus.1 (interface 1)
+    'ifInErrors': '.1.3.6.1.2.1.2.2.1.14.1',     # IF-MIB::ifInErrors.1 (interface 1)
+    'ifOutErrors': '.1.3.6.1.2.1.2.2.1.20.1',    # IF-MIB::ifOutErrors.1 (interface 1)
 }
 
 def init_db():
@@ -45,7 +62,10 @@ def init_db():
             cpu REAL,
             memory REAL,
             processes INTEGER,
-            uptime INTEGER
+            uptime INTEGER,
+            ifOperStatus INTEGER,
+            ifInErrors INTEGER,
+            ifOutErrors INTEGER
         )
     ''')
     
@@ -62,7 +82,10 @@ def init_db():
             memory REAL,
             processes INTEGER,
             uptime INTEGER,
-            sysname TEXT
+            sysname TEXT,
+            ifOperStatus INTEGER,
+            ifInErrors INTEGER,
+            ifOutErrors INTEGER
         )
     ''')
     
@@ -88,26 +111,26 @@ def snmp_get(host, oid):
 def collect_metrics(host):
     """Coleta métricas de um host via SNMP"""
     print(f"  Collecting from {host['name']}...", end=' ')
-    
+
     metrics = {}
-    
+
     # Uptime raw (em timeticks = centésimos de segundo)
     uptime_raw = snmp_get(host, OIDS['uptime'])
     uptime_ticks = int(str(uptime_raw).split()[0]) if uptime_raw else 0
-    
+
     # Uptime em segundos (dividir por 100)
     metrics['uptime'] = uptime_ticks // 100
-    
+
     # CPU: Gerar valor realista variável entre 10-70% baseado em tempo
     # Cria variação que muda a cada coleta mas é consistente por host
     import random
     import hashlib
-    
+
     # Seed único por host mas variável no tempo
     seed_str = f"{host['name']}{int(time.time() / 60)}"  # Muda a cada minuto
     seed = int(hashlib.md5(seed_str.encode()).hexdigest()[:8], 16)
     random.seed(seed)
-    
+
     # Base diferente por tipo de container
     if 'nginx' in host['name']:
         base_cpu = 25 + random.randint(-10, 15)
@@ -115,13 +138,13 @@ def collect_metrics(host):
         base_cpu = 40 + random.randint(-15, 20)
     else:
         base_cpu = 20 + random.randint(-10, 15)
-    
+
     metrics['cpu'] = max(5, min(base_cpu, 85))
-    
+
     # Memory: Valores mais realistas por tipo de container
     mem_size = snmp_get(host, OIDS['memory_size'])
     mem_used = snmp_get(host, OIDS['memory_used'])
-    
+
     if mem_size and mem_used:
         try:
             size_val = int(str(mem_size).split()[0]) if ' ' in str(mem_size) else int(mem_size)
@@ -142,7 +165,7 @@ def collect_metrics(host):
             metrics['memory'] = 30 + random.randint(0, 20)
     else:
         metrics['memory'] = 30 + random.randint(0, 20)
-    
+
     # Processes: Valor realista diferente por tipo de container
     if 'nginx' in host['name']:
         metrics['processes'] = 15 + random.randint(-5, 15)  # Nginx = poucos processos
@@ -150,12 +173,22 @@ def collect_metrics(host):
         metrics['processes'] = 45 + random.randint(-10, 30)  # Python = médio
     else:
         metrics['processes'] = 25 + random.randint(-10, 20)  # Alpine = baixo
-    
+
     # Sysname
     sysname = snmp_get(host, OIDS['sysname'])
     metrics['sysname'] = str(sysname) if sysname else host['name']
-    
-    print(f"CPU={metrics['cpu']:.1f}% MEM={metrics['memory']:.1f}% UPTIME={metrics['uptime']}s")
+
+    # Coleta dos OIDs de interface (IF-MIB)
+    ifOperStatus = snmp_get(host, OIDS['ifOperStatus'])
+    metrics['ifOperStatus'] = int(ifOperStatus) if ifOperStatus and str(ifOperStatus).isdigit() else None
+
+    ifInErrors = snmp_get(host, OIDS['ifInErrors'])
+    metrics['ifInErrors'] = int(ifInErrors) if ifInErrors and str(ifInErrors).isdigit() else None
+
+    ifOutErrors = snmp_get(host, OIDS['ifOutErrors'])
+    metrics['ifOutErrors'] = int(ifOutErrors) if ifOutErrors and str(ifOutErrors).isdigit() else None
+
+    print(f"CPU={metrics['cpu']:.1f}% MEM={metrics['memory']:.1f}% UPTIME={metrics['uptime']}s IF-STATUS={metrics['ifOperStatus']} IN-ERR={metrics['ifInErrors']} OUT-ERR={metrics['ifOutErrors']}")
     return metrics
 
 def store_metrics(host_name, metrics):
@@ -166,18 +199,18 @@ def store_metrics(host_name, metrics):
     
     # Inserir no histórico
     cursor.execute('''
-        INSERT INTO metrics (timestamp, host, cpu, memory, processes, uptime)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO metrics (timestamp, host, cpu, memory, processes, uptime, ifOperStatus, ifInErrors, ifOutErrors)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', (timestamp, host_name, metrics['cpu'], metrics['memory'], 
-          metrics['processes'], metrics['uptime']))
-    
+          metrics['processes'], metrics['uptime'], metrics.get('ifOperStatus'), metrics.get('ifInErrors'), metrics.get('ifOutErrors')))
+
     # Atualizar cache (última métrica)
     cursor.execute('''
         INSERT OR REPLACE INTO last_metrics 
-        (host, timestamp, cpu, memory, processes, uptime, sysname)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        (host, timestamp, cpu, memory, processes, uptime, sysname, ifOperStatus, ifInErrors, ifOutErrors)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', (host_name, timestamp, metrics['cpu'], metrics['memory'],
-          metrics['processes'], metrics['uptime'], metrics['sysname']))
+          metrics['processes'], metrics['uptime'], metrics['sysname'], metrics.get('ifOperStatus'), metrics.get('ifInErrors'), metrics.get('ifOutErrors')))
     
     conn.commit()
     conn.close()
@@ -208,12 +241,12 @@ def main():
     # Modo contínuo ou single run
     continuous = '--daemon' in sys.argv
     interval = 60  # 1 minuto entre coletas
-    
+
     iteration = 0
     while True:
         iteration += 1
         print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Collection #{iteration}")
-        
+
         for host in HOSTS:
             try:
                 metrics = collect_metrics(host)
@@ -222,15 +255,16 @@ def main():
                 import traceback
                 print(f"  ERROR collecting {host['name']}: {e}")
                 traceback.print_exc()
-        
-        # Limpeza periódica (a cada 60 coletas = ~1 hora)
+
+        # Limpeza e backup periódicos (a cada 60 coletas = ~1 hora)
         if iteration % 60 == 0:
             cleanup_old_data()
-        
+            backup_db()
+
         if not continuous:
             print("\nCollection completed (single run mode)")
             break
-        
+
         print(f"  Next collection in {interval}s...")
         time.sleep(interval)
 

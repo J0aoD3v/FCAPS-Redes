@@ -10,9 +10,22 @@ import sqlite3
 from datetime import datetime
 from easysnmp import Session
 import sys
+import shutil
 
 # Configurações
 DB_PATH = '/data/snmp_metrics.db'
+BACKUP_DIR = '/home/opc/snmp-backups/'
+def backup_db():
+    """Faz backup do banco de dados SQLite"""
+    try:
+        now = datetime.now().strftime('%Y%m%d_%H%M%S')
+        backup_path = f"{BACKUP_DIR}cloud_{now}.db"
+        shutil.copy(DB_PATH, backup_path)
+        # Atualiza o backup atual
+        shutil.copy(DB_PATH, f"{BACKUP_DIR}cloud_current.db")
+        print(f"  Backup realizado em {backup_path}")
+    except Exception as e:
+        print(f"  Erro ao fazer backup: {e}")
 # Hosts acessíveis da nuvem - APENAS remotos e localhost
 HOSTS = [
     {'name': 'snmp-collector-cloud', 'ip': 'localhost', 'community': 'public'},  # Auto-monitoramento
@@ -221,9 +234,10 @@ def main():
                 print(f"  ERROR collecting {host['name']}: {e}")
                 traceback.print_exc()
         
-        # Limpeza periódica (a cada 60 coletas = ~1 hora)
+        # Limpeza e backup periódicos (a cada 60 coletas = ~1 hora)
         if iteration % 60 == 0:
             cleanup_old_data()
+            backup_db()
         
         if not continuous:
             print("\nCollection completed (single run mode)")

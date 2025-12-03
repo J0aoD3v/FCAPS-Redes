@@ -604,6 +604,34 @@
                 </button>
               </div>
             </div>
+            <div style="margin-bottom: 10px">
+              <input
+                type="text"
+                id="newHostInput"
+                placeholder="IP ou hostname do novo host"
+                style="
+                  padding: 6px;
+                  border-radius: 4px;
+                  border: 1px solid #2a3650;
+                  width: 220px;
+                "
+              />
+              <input
+                type="text"
+                id="newHostCommunity"
+                placeholder="Community (ex: public)"
+                style="
+                  padding: 6px;
+                  border-radius: 4px;
+                  border: 1px solid #2a3650;
+                  width: 120px;
+                "
+              />
+              <button class="selector-btn" onclick="addExternalHost()">
+                Adicionar Host
+              </button>
+            </div>
+            <div id="externalHostsList" style="margin-bottom: 10px"></div>
             <div class="host-checkboxes" id="hostSelector"></div>
           </div>
 
@@ -933,6 +961,9 @@
           uptime: formatUptime(host.uptime || 0),
           uptimeSeconds: host.uptime || 0,
           processes: host.processes || 0,
+          ifOperStatus: host.ifOperStatus,
+          ifInErrors: host.ifInErrors,
+          ifOutErrors: host.ifOutErrors,
         };
       }
 
@@ -998,28 +1029,95 @@
       }
 
       function saveHostPreferences() {
-        const prefs = {
-          selected: Array.from(selectedHosts),
-        };
-        localStorage.setItem("fcaps_host_prefs", JSON.stringify(prefs));
+        try {
+          const preferences = {
+            selectedHosts: Array.from(selectedHosts),
+            hostColors: hostColors,
+          };
+          localStorage.setItem("fcaps_host_prefs", JSON.stringify(preferences));
+        } catch (error) {
+          console.error("Error saving host preferences:", error);
+        }
       }
 
       function loadHostPreferences() {
-        const prefs = localStorage.getItem("fcaps_host_prefs");
-        if (prefs) {
-          try {
-            const data = JSON.parse(prefs);
-            if (data.selected) {
-              selectedHosts = new Set(data.selected);
+        try {
+          const saved = localStorage.getItem("fcaps_host_prefs");
+          if (saved) {
+            const preferences = JSON.parse(saved);
+
+            // Restore selected hosts (only if they still exist in allHosts)
+            if (preferences.selectedHosts) {
+              selectedHosts.clear();
+              preferences.selectedHosts.forEach((hostName) => {
+                if (allHosts.some((h) => h.host === hostName)) {
+                  selectedHosts.add(hostName);
+                }
+              });
             }
-          } catch (e) {
-            console.error("Error loading preferences:", e);
+
+            // Restore host colors (only for existing hosts)
+            if (preferences.hostColors) {
+              Object.keys(preferences.hostColors).forEach((hostName) => {
+                if (allHosts.some((h) => h.host === hostName)) {
+                  hostColors[hostName] = preferences.hostColors[hostName];
+                }
+              });
+            }
           }
+        } catch (error) {
+          console.error("Error loading host preferences:", error);
         }
+      }
+
+      // Hosts externos adicionados pelo usuário (apenas frontend, precisa API para persistir)
+      let externalHosts = [];
+
+      function addExternalHost() {
+        const ip = document.getElementById("newHostInput").value.trim();
+        const community =
+          document.getElementById("newHostCommunity").value.trim() || "public";
+        if (!ip) return alert("Informe o IP ou hostname do host!");
+        // Adiciona ao array local
+        externalHosts.push({ host: ip, name: ip, community });
+        document.getElementById("newHostInput").value = "";
+        document.getElementById("newHostCommunity").value = "";
+        renderExternalHosts();
+        // Aqui deveria chamar a API para persistir no coletor
+      }
+
+      function removeExternalHost(idx) {
+        externalHosts.splice(idx, 1);
+        renderExternalHosts();
+        // Aqui deveria chamar a API para remover do coletor
+      }
+
+      function renderExternalHosts() {
+        const list = document.getElementById("externalHostsList");
+        if (externalHosts.length === 0) {
+          list.innerHTML = "";
+          return;
+        }
+        list.innerHTML = externalHosts
+          .map(
+            (h, idx) =>
+              `<span style='background:#0f1829; color:#fff; padding:4px 10px; border-radius:4px; margin-right:8px;'>${h.name} <button onclick='removeExternalHost(${idx})' style='background:#e74c3c; color:#fff; border:none; border-radius:2px; padding:2px 6px; margin-left:4px; cursor:pointer;'>Remover</button></span>`
+          )
+          .join("");
       }
 
       function renderHostSelector(hosts) {
         const selector = document.getElementById("hostSelector");
+
+        // Obter lista de nomes de hosts válidos
+        const currentHostNames = hosts.map((h) => h.host);
+
+        // Limpar cores de hosts que não existem mais
+        Object.keys(hostColors).forEach((hostName) => {
+          if (!currentHostNames.includes(hostName)) {
+            delete hostColors[hostName];
+          }
+        });
 
         hosts.forEach((host, idx) => {
           // Definir cor padrão se não existir
@@ -1033,22 +1131,27 @@
           }
         });
 
-        selector.innerHTML = hosts
+        // Adiciona hosts externos à lista de seleção
+        const allHostsWithExternal = hosts.concat(externalHosts);
+
+        selector.innerHTML = allHostsWithExternal
           .map((host, idx) => {
             const isChecked = selectedHosts.has(host.host);
-            const color = hostColors[host.host];
+            const color =
+              hostColors[host.host] ||
+              defaultColors[idx % defaultColors.length];
 
             return `
             <div class="host-checkbox-item">
-              <input 
-                type="checkbox" 
-                id="check-${host.host}" 
+              <input
+                type="checkbox"
+                id="check-${host.host}"
                 ${isChecked ? "checked" : ""}
                 onchange="toggleHost('${host.host}')"
               >
               <label class="host-checkbox-label" for="check-${host.host}">
-                <div 
-                  class="host-color-indicator" 
+                <div
+                  class="host-color-indicator"
                   id="color-${host.host}"
                   style="background: ${color}"
                 ></div>
@@ -1099,57 +1202,87 @@
         const memClass =
           host.memory > 80 ? "critical" : host.memory > 50 ? "warning" : "ok";
 
+        // Status da interface
+        let ifStatusLabel = "Unknown";
+        let ifStatusColor = "#8b98b8";
+        if (host.ifOperStatus === 1) {
+          ifStatusLabel = "Up";
+          ifStatusColor = "#2ecc71";
+        } else if (host.ifOperStatus === 2) {
+          ifStatusLabel = "Down";
+          ifStatusColor = "#e74c3c";
+        } else if (host.ifOperStatus === 3) {
+          ifStatusLabel = "Testing";
+          ifStatusColor = "#f39c12";
+        }
+
         return `
-                <div class="card">
-                    <div class="card-header">
-                        <div class="host-name">${host.name}</div>
-                        <span class="host-badge">OK</span>
-                    </div>
-                    
-                    <div class="metric-row">
-                        <div class="metric-label">CPU utilization</div>
-                        <div class="metric-value ${cpuClass}">${host.cpu.toFixed(
+            <div class="card">
+              <div class="card-header">
+                <div class="host-name">${host.name}</div>
+                <span class="host-badge">OK</span>
+              </div>
+
+              <div class="metric-row">
+                <div class="metric-label">CPU utilization</div>
+                <div class="metric-value ${cpuClass}">${host.cpu.toFixed(
           0
         )}%</div>
-                    </div>
-                    <div class="progress-bar">
-                        <div class="progress-fill ${getProgressClass(
-                          host.cpu
-                        )}" style="width: ${host.cpu}%"></div>
-                    </div>
+              </div>
+              <div class="progress-bar">
+                <div class="progress-fill ${getProgressClass(
+                  host.cpu
+                )}" style="width: ${host.cpu}%"></div>
+              </div>
 
-                    <div class="metric-row" style="margin-top: 8px;">
-                        <div class="metric-label">Memory utilization</div>
-                        <div class="metric-value ${memClass}">${host.memory.toFixed(
+              <div class="metric-row" style="margin-top: 8px;">
+                <div class="metric-label">Memory utilization</div>
+                <div class="metric-value ${memClass}">${host.memory.toFixed(
           0
         )}%</div>
-                    </div>
-                    <div class="progress-bar">
-                        <div class="progress-fill ${getProgressClass(
-                          host.memory
-                        )}" style="width: ${host.memory}%"></div>
-                    </div>
+              </div>
+              <div class="progress-bar">
+                <div class="progress-fill ${getProgressClass(
+                  host.memory
+                )}" style="width: ${host.memory}%"></div>
+              </div>
 
-                    <div class="info-grid" style="margin-top: 12px;">
-                        <div class="info-item">
-                            <div class="info-label">System Uptime</div>
-                            <div class="info-value">${host.uptime}</div>
-                        </div>
-                        <div class="info-item">
-                            <div class="info-label">Running Processes</div>
-                            <div class="info-value">${host.processes}</div>
-                        </div>
-                        <div class="info-item">
-                            <div class="info-label">SNMP Protocol</div>
-                            <div class="info-value" style="color: #8b98b8;">v2c</div>
-                        </div>
-                        <div class="info-item">
-                            <div class="info-label">Collection Status</div>
-                            <div class="info-value" style="color: #2ecc71;">Active</div>
-                        </div>
-                    </div>
+              <div class="info-grid" style="margin-top: 12px;">
+                <div class="info-item">
+                  <div class="info-label">System Uptime</div>
+                  <div class="info-value">${host.uptime}</div>
                 </div>
-            `;
+                <div class="info-item">
+                  <div class="info-label">Running Processes</div>
+                  <div class="info-value">${host.processes}</div>
+                </div>
+                <div class="info-item">
+                  <div class="info-label">SNMP Protocol</div>
+                  <div class="info-value" style="color: #8b98b8;">v2c</div>
+                </div>
+                <div class="info-item">
+                  <div class="info-label">Collection Status</div>
+                  <div class="info-value" style="color: #2ecc71;">Active</div>
+                </div>
+                <div class="info-item">
+                  <div class="info-label">Interface Status</div>
+                  <div class="info-value" style="color: ${ifStatusColor};">${ifStatusLabel}</div>
+                </div>
+                <div class="info-item">
+                  <div class="info-label">In Errors</div>
+                  <div class="info-value" style="color: #e74c3c;">${
+                    host.ifInErrors ?? "-"
+                  }</div>
+                </div>
+                <div class="info-item">
+                  <div class="info-label">Out Errors</div>
+                  <div class="info-value" style="color: #e67e22;">${
+                    host.ifOutErrors ?? "-"
+                  }</div>
+                </div>
+              </div>
+            </div>
+          `;
       }
 
       async function createCharts(hosts) {
@@ -1555,8 +1688,41 @@
             throw new Error("No hosts found in SNMP database");
           }
 
-          // Carregar preferências salvas
+          // Carregar preferências salvas primeiro
           loadHostPreferences();
+
+          // Limpar hosts obsoletos do localStorage (api-foda, instance-*, etc)
+          const currentHostNames = allHosts.map((h) => h.host);
+          const obsoleteHosts = ["api-foda", "instance-20251116-2130"];
+          let needsCleanup = false;
+
+          // Verificar se há hosts obsoletos nas cores
+          Object.keys(hostColors).forEach((hostName) => {
+            if (
+              !currentHostNames.includes(hostName) ||
+              obsoleteHosts.includes(hostName)
+            ) {
+              delete hostColors[hostName];
+              needsCleanup = true;
+            }
+          });
+
+          // Verificar selectedHosts
+          selectedHosts.forEach((hostName) => {
+            if (
+              !currentHostNames.includes(hostName) ||
+              obsoleteHosts.includes(hostName)
+            ) {
+              selectedHosts.delete(hostName);
+              needsCleanup = true;
+            }
+          });
+
+          // Salvar preferências após limpeza
+          if (needsCleanup) {
+            saveHostPreferences();
+            console.log("Cleaned up obsolete hosts from preferences");
+          }
 
           // Renderizar seletor de hosts
           renderHostSelector(allHosts);

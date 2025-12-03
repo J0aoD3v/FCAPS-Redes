@@ -8,8 +8,10 @@ import json
 import sqlite3
 import time
 from urllib.parse import urlparse, parse_qs
+import os
 
 DB_PATH = '/data/snmp_metrics.db'
+HOSTS_FILE = '/data/hosts.json'
 PORT = 8090
 
 class APIHandler(BaseHTTPRequestHandler):
@@ -59,14 +61,25 @@ class APIHandler(BaseHTTPRequestHandler):
             return
         
         # API endpoints
+        if path.startswith('/api/hosts/add') or path.startswith('/api/hosts/remove'):
+            length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(length).decode() if length > 0 else ''
+            try:
+                data = json.loads(body) if body else {}
+            except:
+                data = {}
         self.send_response(200)
         self.send_header('Content-type', 'application/json')
         self.send_header('Access-Control-Allow-Origin', '*')
         self.end_headers()
-        
+
         try:
             if path == '/api/hosts':
-                response = self.get_hosts()
+                response = self.get_hosts_list()
+            elif path == '/api/hosts/add':
+                response = self.add_host(data)
+            elif path == '/api/hosts/remove':
+                response = self.remove_host(data)
             elif path == '/api/history':
                 host = params.get('host', [None])[0]
                 time_range = params.get('range', ['1h'])[0]
@@ -76,23 +89,23 @@ class APIHandler(BaseHTTPRequestHandler):
                 response = self.get_latest()
             else:
                 response = {'error': 'Unknown endpoint'}
-                
+
             self.wfile.write(json.dumps(response).encode())
         except Exception as e:
             error_response = {'error': str(e)}
             self.wfile.write(json.dumps(error_response).encode())
     
     def get_hosts(self):
-        """Retorna lista de hosts monitorados"""
+        """Retorna lista de hosts monitorados (métricas)"""
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-        
+
         cursor.execute('''
             SELECT host, cpu, memory, processes, uptime, sysname, timestamp
             FROM last_metrics
             ORDER BY host
         ''')
-        
+
         hosts = []
         for row in cursor.fetchall():
             hosts.append({
@@ -104,9 +117,67 @@ class APIHandler(BaseHTTPRequestHandler):
                 'sysname': row[5],
                 'timestamp': row[6]
             })
-        
+
         conn.close()
         return {'hosts': hosts}
+
+    def get_hosts_list(self):
+        """Retorna lista de hosts monitorados (configuração)"""
+        if os.path.exists(HOSTS_FILE):
+            try:
+                with open(HOSTS_FILE, 'r', encoding='utf-8') as f:
+                    hosts = json.load(f)
+            except Exception as e:
+                hosts = []
+        else:
+            hosts = []
+        return {'hosts': hosts}
+
+    def add_host(self, data):
+        """Adiciona um host ao arquivo de configuração"""
+        if not data or 'host' not in data:
+            return {'error': 'Host inválido'}
+        hosts = []
+        if os.path.exists(HOSTS_FILE):
+            try:
+                with open(HOSTS_FILE, 'r', encoding='utf-8') as f:
+                    hosts = json.load(f)
+            except:
+                hosts = []
+        # Evitar duplicados
+        for h in hosts:
+            if h.get('host') == data['host']:
+                return {'error': 'Host já existe'}
+        hosts.append({
+            'host': data['host'],
+            'name': data.get('name', data['host']),
+            'community': data.get('community', 'public')
+        })
+        try:
+            with open(HOSTS_FILE, 'w', encoding='utf-8') as f:
+                json.dump(hosts, f, ensure_ascii=False, indent=2)
+            return {'success': True, 'hosts': hosts}
+        except Exception as e:
+            return {'error': str(e)}
+
+    def remove_host(self, data):
+        """Remove um host do arquivo de configuração"""
+        if not data or 'host' not in data:
+            return {'error': 'Host inválido'}
+        hosts = []
+        if os.path.exists(HOSTS_FILE):
+            try:
+                with open(HOSTS_FILE, 'r', encoding='utf-8') as f:
+                    hosts = json.load(f)
+            except:
+                hosts = []
+        hosts = [h for h in hosts if h.get('host') != data['host']]
+        try:
+            with open(HOSTS_FILE, 'w', encoding='utf-8') as f:
+                json.dump(hosts, f, ensure_ascii=False, indent=2)
+            return {'success': True, 'hosts': hosts}
+        except Exception as e:
+            return {'error': str(e)}
     
     def get_latest(self):
         """Retorna últimas métricas de todos os hosts"""
