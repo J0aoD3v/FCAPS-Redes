@@ -534,6 +534,14 @@
             <canvas id="memoryChart" style="height: 200px"></canvas>
           </div>
 
+          <div class="chart-container">
+            <div class="chart-header">
+              <div class="chart-title">System Uptime - Tempo de atividade</div>
+              <div class="chart-legend" id="uptimeLegend"></div>
+            </div>
+            <canvas id="uptimeChart" style="height: 200px"></canvas>
+          </div>
+
           <!-- Host Cards -->
           <div class="grid" id="hostsGrid"></div>
         </div>
@@ -545,6 +553,7 @@
       const SNMP_API_URL = "http://localhost:8090/api";
       let cpuChart = null;
       let memoryChart = null;
+      let uptimeChart = null;
       let currentTimeRange = "1h";
       let currentTimeLabel = "Last 1 hour";
 
@@ -622,6 +631,27 @@
         return intervals[currentTimeRange] || 60000;
       }
 
+      function getMaxTicks() {
+        const ticks = {
+          "5m": 10,
+          "15m": 12,
+          "30m": 15,
+          "1h": 12,
+          "3h": 18,
+          "6h": 24,
+          "12h": 24,
+          "24h": 24,
+          "2d": 20,
+          "7d": 14,
+          "30d": 15,
+          "3mo": 12,
+          "6mo": 12,
+          "1y": 12,
+          "2y": 12,
+        };
+        return ticks[currentTimeRange] || 12;
+      }
+
       // Dados SNMP coletados do Zabbix Server
       const mockData = {
         hosts: [
@@ -695,19 +725,22 @@
         return {
           hostid: host.host,
           host: host.host,
-          name: host.host + " (SNMP)",
+          name: host.sysname || host.host,
           cpu: host.cpu || 0,
           memory: host.memory || 0,
           uptime: formatUptime(host.uptime || 0),
+          uptimeSeconds: host.uptime || 0,
           processes: host.processes || 0,
-          load: 0,
         };
       }
 
       function formatUptime(seconds) {
         const hours = Math.floor(seconds / 3600);
         const minutes = Math.floor((seconds % 3600) / 60);
-        return `${hours}:${minutes.toString().padStart(2, "0")}`;
+        const secs = seconds % 60;
+        return `${hours}h ${minutes.toString().padStart(2, "0")}m ${secs
+          .toString()
+          .padStart(2, "0")}s`;
       }
 
       function getProgressClass(value) {
@@ -761,21 +794,19 @@
 
                     <div class="info-grid" style="margin-top: 12px;">
                         <div class="info-item">
-                            <div class="info-label">Uptime</div>
+                            <div class="info-label">System Uptime</div>
                             <div class="info-value">${host.uptime}</div>
                         </div>
                         <div class="info-item">
-                            <div class="info-label">Processes</div>
+                            <div class="info-label">Running Processes</div>
                             <div class="info-value">${host.processes}</div>
                         </div>
                         <div class="info-item">
-                            <div class="info-label">Load avg</div>
-                            <div class="info-value">${host.load.toFixed(
-                              2
-                            )}</div>
+                            <div class="info-label">SNMP Protocol</div>
+                            <div class="info-value" style="color: #8b98b8;">v2c</div>
                         </div>
                         <div class="info-item">
-                            <div class="info-label">SNMP Status</div>
+                            <div class="info-label">Collection Status</div>
                             <div class="info-value" style="color: #2ecc71;">Active</div>
                         </div>
                     </div>
@@ -785,36 +816,99 @@
 
       async function createCharts(hosts) {
         const colors = ["#2ecc71", "#3498db", "#9b59b6"];
+        const colorsAlpha = [
+          "rgba(46, 204, 113, 0.2)",
+          "rgba(52, 152, 219, 0.2)",
+          "rgba(155, 89, 182, 0.2)",
+        ];
 
         // Buscar dados históricos reais da API
         const cpuHistory = await getHistory("cpu");
         const memHistory = await getHistory("memory");
+        const uptimeHistory = await getHistory("uptime");
+
+        // Verificar se há dados suficientes
+        if (cpuHistory.length === 0) {
+          console.warn("No historical data available for selected time range");
+        }
+
+        console.log(`Debug: CPU history length: ${cpuHistory.length}`);
+        console.log(`Debug: Memory history length: ${memHistory.length}`);
+        console.log(`Debug: Uptime history length: ${uptimeHistory.length}`);
 
         // Processar dados históricos por host
         const hostData = {};
+        const timestamps = new Set();
+
         hosts.forEach((host) => {
-          hostData[host.host] = { cpu: [], memory: [], labels: [] };
+          hostData[host.host] = { cpu: [], memory: [], uptime: [], labels: [] };
+        });
+
+        // Coletar todos os timestamps únicos
+        cpuHistory.forEach((entry) => timestamps.add(entry.timestamp));
+        memHistory.forEach((entry) => timestamps.add(entry.timestamp));
+        uptimeHistory.forEach((entry) => timestamps.add(entry.timestamp));
+
+        // Ordenar timestamps
+        const sortedTimestamps = Array.from(timestamps).sort((a, b) => a - b);
+
+        console.log(
+          `Debug: Unique timestamps collected: ${sortedTimestamps.length}`
+        );
+        if (sortedTimestamps.length > 0) {
+          const firstDate = new Date(sortedTimestamps[0] * 1000);
+          const lastDate = new Date(
+            sortedTimestamps[sortedTimestamps.length - 1] * 1000
+          );
+          console.log(
+            `Debug: Time range: ${firstDate.toLocaleString(
+              "pt-BR"
+            )} to ${lastDate.toLocaleString("pt-BR")}`
+          );
+        }
+
+        // Criar labels de tempo
+        const timeLabels = sortedTimestamps.map((timestamp) => {
+          const date = new Date(timestamp * 1000);
+          return currentTimeRange.includes("d") ||
+            currentTimeRange.includes("mo") ||
+            currentTimeRange.includes("y")
+            ? date.toLocaleDateString("pt-BR", {
+                day: "2-digit",
+                month: "2-digit",
+              })
+            : date.toLocaleTimeString("pt-BR", {
+                hour: "2-digit",
+                minute: "2-digit",
+              });
+        });
+        console.log(`Debug: Total labels criados: ${timeLabels.length}`);
+
+        // Criar mapas timestamp -> índice
+        const timestampIndex = {};
+        sortedTimestamps.forEach((ts, idx) => {
+          timestampIndex[ts] = idx;
+        });
+
+        // Inicializar arrays com valores null
+        hosts.forEach((host) => {
+          hostData[host.host].cpu = new Array(sortedTimestamps.length).fill(
+            null
+          );
+          hostData[host.host].memory = new Array(sortedTimestamps.length).fill(
+            null
+          );
+          hostData[host.host].uptime = new Array(sortedTimestamps.length).fill(
+            null
+          );
         });
 
         // Agrupar dados de CPU
         cpuHistory.forEach((entry) => {
           if (hostData[entry.host]) {
-            hostData[entry.host].cpu.push(entry.value);
-            const date = new Date(entry.timestamp * 1000);
-            const label =
-              currentTimeRange.includes("d") ||
-              currentTimeRange.includes("mo") ||
-              currentTimeRange.includes("y")
-                ? date.toLocaleDateString("pt-BR", {
-                    day: "2-digit",
-                    month: "2-digit",
-                  })
-                : date.toLocaleTimeString("pt-BR", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  });
-            if (!hostData[entry.host].labels.includes(label)) {
-              hostData[entry.host].labels.push(label);
+            const idx = timestampIndex[entry.timestamp];
+            if (idx !== undefined) {
+              hostData[entry.host].cpu[idx] = entry.value;
             }
           }
         });
@@ -822,25 +916,38 @@
         // Agrupar dados de Memory
         memHistory.forEach((entry) => {
           if (hostData[entry.host]) {
-            hostData[entry.host].memory.push(entry.value);
+            const idx = timestampIndex[entry.timestamp];
+            if (idx !== undefined) {
+              hostData[entry.host].memory[idx] = entry.value;
+            }
           }
         });
 
-        // Usar labels do primeiro host (todos devem ter os mesmos timestamps)
-        const timeLabels = hostData[hosts[0]?.host]?.labels || [];
+        // Agrupar dados de Uptime (converter para horas)
+        uptimeHistory.forEach((entry) => {
+          if (hostData[entry.host]) {
+            const idx = timestampIndex[entry.timestamp];
+            if (idx !== undefined) {
+              hostData[entry.host].uptime[idx] = parseFloat(
+                (entry.value / 3600).toFixed(2)
+              );
+            }
+          }
+        });
 
-        // Criar datasets para CPU
+        // Criar datasets para CPU com preenchimento
         const cpuDatasets = hosts.map((host, idx) => {
           return {
             label: host.name,
             data: hostData[host.host]?.cpu || [],
             borderColor: colors[idx],
-            backgroundColor: "transparent",
+            backgroundColor: colorsAlpha[idx],
             borderWidth: 2,
             tension: 0.4,
             pointRadius: 0,
             pointHoverRadius: 3,
-            fill: false,
+            fill: true,
+            spanGaps: true,
           };
         });
 
@@ -871,8 +978,9 @@
                 grid: { color: "#2a3650", drawBorder: false },
                 ticks: {
                   color: "#8b98b8",
-                  maxTicksLimit: 12,
+                  maxTicksLimit: getMaxTicks(),
                   autoSkip: true,
+                  source: "auto",
                   maxRotation: 0,
                   minRotation: 0,
                 },
@@ -891,18 +999,19 @@
           },
         });
 
-        // Criar datasets para Memory
+        // Criar datasets para Memory com preenchimento
         const memDatasets = hosts.map((host, idx) => {
           return {
             label: host.name,
             data: hostData[host.host]?.memory || [],
             borderColor: colors[idx],
-            backgroundColor: "transparent",
+            backgroundColor: colorsAlpha[idx],
             borderWidth: 2,
             tension: 0.4,
             pointRadius: 0,
             pointHoverRadius: 3,
-            fill: false,
+            fill: true,
+            spanGaps: true,
           };
         });
 
@@ -933,8 +1042,9 @@
                 grid: { color: "#2a3650", drawBorder: false },
                 ticks: {
                   color: "#8b98b8",
-                  maxTicksLimit: 12,
+                  maxTicksLimit: getMaxTicks(),
                   autoSkip: true,
+                  source: "auto",
                   maxRotation: 0,
                   minRotation: 0,
                 },
@@ -953,6 +1063,83 @@
           },
         });
 
+        // Criar datasets para Uptime com preenchimento
+        // O uptime mostra a progressão temporal: quanto tempo o sistema está rodando
+        const uptimeDatasets = hosts.map((host, idx) => {
+          return {
+            label: host.name,
+            data: hostData[host.host]?.uptime || [],
+            borderColor: colors[idx],
+            backgroundColor: colorsAlpha[idx],
+            borderWidth: 2,
+            tension: 0.4,
+            pointRadius: 0,
+            pointHoverRadius: 3,
+            fill: true,
+            spanGaps: true,
+          };
+        });
+
+        // Uptime Chart - mostra evolução do tempo de atividade
+        const uptimeCtx = document
+          .getElementById("uptimeChart")
+          .getContext("2d");
+        if (uptimeChart) uptimeChart.destroy();
+        uptimeChart = new Chart(uptimeCtx, {
+          type: "line",
+          data: {
+            labels: timeLabels,
+            datasets: uptimeDatasets,
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                mode: "index",
+                intersect: false,
+                backgroundColor: "#1a2332",
+                borderColor: "#2a3650",
+                borderWidth: 1,
+                callbacks: {
+                  label: function (context) {
+                    const hours = context.parsed.y;
+                    const h = Math.floor(hours);
+                    const m = Math.floor((hours - h) * 60);
+                    return context.dataset.label + ": " + h + "h " + m + "m";
+                  },
+                },
+              },
+            },
+            scales: {
+              x: {
+                grid: { color: "#2a3650", drawBorder: false },
+                ticks: {
+                  color: "#8b98b8",
+                  maxTicksLimit: getMaxTicks(),
+                  autoSkip: true,
+                  source: "auto",
+                  maxRotation: 0,
+                  minRotation: 0,
+                },
+              },
+              y: {
+                beginAtZero: true,
+                grid: { color: "#2a3650", drawBorder: false },
+                ticks: {
+                  color: "#8b98b8",
+                  callback: (value) => {
+                    const h = Math.floor(value);
+                    const m = Math.floor((value - h) * 60);
+                    return h + "h" + (m > 0 ? " " + m + "m" : "");
+                  },
+                },
+              },
+            },
+          },
+        });
+
         // Atualizar legendas
         updateLegends(hosts, colors);
       }
@@ -960,6 +1147,7 @@
       function updateLegends(hosts, colors) {
         const cpuLegend = document.getElementById("cpuLegend");
         const memoryLegend = document.getElementById("memoryLegend");
+        const uptimeLegend = document.getElementById("uptimeLegend");
 
         const legendHTML = hosts
           .map(
@@ -974,6 +1162,7 @@
 
         cpuLegend.innerHTML = legendHTML;
         memoryLegend.innerHTML = legendHTML;
+        uptimeLegend.innerHTML = legendHTML;
       }
 
       async function loadData() {

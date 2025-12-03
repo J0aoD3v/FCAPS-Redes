@@ -2,8 +2,8 @@ FROM python:3.11-alpine
 
 WORKDIR /app
 
-# Instalar dependências do sistema
-RUN apk add --no-cache gcc musl-dev libffi-dev
+# Instalar dependências do sistema (easysnmp precisa de net-snmp-dev)
+RUN apk add --no-cache gcc musl-dev libffi-dev net-snmp-dev net-snmp-libs
 
 # Copiar requirements
 COPY requirements.txt .
