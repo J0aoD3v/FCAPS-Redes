@@ -445,9 +445,16 @@
           <div class="dashboard-title">Dashboard: SNMP Monitoring</div>
         </div>
         <div class="header-right">
-          <select class="time-selector" id="dataSourceSelector" onchange="changeDataSource()" style="margin-right: 10px;">
+          <select
+            class="time-selector"
+            id="dataSourceSelector"
+            onchange="changeDataSource()"
+            style="margin-right: 10px"
+          >
             <option value="http://localhost:8090/api">🖥️ Local PC</option>
-            <option value="http://137.131.133.165:8090/api">☁️ Oracle Cloud</option>
+            <option value="http://137.131.133.165:8090/api">
+              ☁️ Oracle Cloud
+            </option>
           </select>
           <div style="position: relative">
             <button
@@ -670,17 +677,17 @@
       let hostColors = {};
 
       function changeDataSource() {
-        const selector = document.getElementById('dataSourceSelector');
+        const selector = document.getElementById("dataSourceSelector");
         SNMP_API_URL = selector.value;
-        localStorage.setItem('fcaps_data_source', SNMP_API_URL);
+        localStorage.setItem("fcaps_data_source", SNMP_API_URL);
         loadData();
       }
 
       function loadDataSourcePreference() {
-        const saved = localStorage.getItem('fcaps_data_source');
+        const saved = localStorage.getItem("fcaps_data_source");
         if (saved) {
           SNMP_API_URL = saved;
-          document.getElementById('dataSourceSelector').value = saved;
+          document.getElementById("dataSourceSelector").value = saved;
         }
       }
 
