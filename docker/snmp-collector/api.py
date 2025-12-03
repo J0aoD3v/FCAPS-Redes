@@ -101,7 +101,7 @@ class APIHandler(BaseHTTPRequestHandler):
         cursor = conn.cursor()
 
         cursor.execute('''
-            SELECT host, cpu, memory, processes, uptime, sysname, timestamp
+            SELECT host, cpu, memory, processes, uptime, sysname, timestamp, ifOperStatus, ifInErrors, ifOutErrors
             FROM last_metrics
             ORDER BY host
         ''')
@@ -115,7 +115,10 @@ class APIHandler(BaseHTTPRequestHandler):
                 'processes': row[3],
                 'uptime': row[4],
                 'sysname': row[5],
-                'timestamp': row[6]
+                'timestamp': row[6],
+                'ifOperStatus': row[7] if len(row) > 7 else None,
+                'ifInErrors': row[8] if len(row) > 8 else None,
+                'ifOutErrors': row[9] if len(row) > 9 else None
             })
 
         conn.close()

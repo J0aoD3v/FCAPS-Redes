@@ -23,7 +23,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
 # Copiar código
-COPY collector.py api.py entrypoint.sh ./
+COPY collector.py collector-cloud.py api.py entrypoint.sh ./
 
 # Tornar script executável
 RUN chmod +x entrypoint.sh

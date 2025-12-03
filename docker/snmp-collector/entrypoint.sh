@@ -49,13 +49,26 @@ mkdir -p /data
 
 echo "Starting SNMP Collector..."
 
+# Detectar qual collector usar
+# Na nuvem, usar collector-cloud.py que só tem hosts remotos
+# Localmente, usar collector.py que tem containers Docker locais
+COLLECTOR_SCRIPT="/app/collector.py"
+
+# Verificar se estamos na nuvem (hosts locais não acessíveis)
+if ! getent hosts nginx-web >/dev/null 2>&1; then
+    echo "Cloud environment detected - using collector-cloud.py"
+    COLLECTOR_SCRIPT="/app/collector-cloud.py"
+else
+    echo "Local environment detected - using collector.py"
+fi
+
 # Inicializar banco de dados (primeira execução)
 echo "Initializing database..."
-python3 /app/collector.py
+python3 $COLLECTOR_SCRIPT
 
 # Iniciar coletor em modo daemon (background)
 echo "Starting SNMP collector daemon..."
-python3 /app/collector.py --daemon &
+python3 $COLLECTOR_SCRIPT --daemon &
 
 # Iniciar API REST (foreground)
 echo "Starting API server..."

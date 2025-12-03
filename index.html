@@ -581,6 +581,20 @@
             </div>
           </div>
           <button class="refresh-btn" onclick="loadData()">🔄 Refresh</button>
+          <div
+            id="apiStatusIndicator"
+            style="
+              display: inline-block;
+              width: 10px;
+              height: 10px;
+              border-radius: 50%;
+              background: #8b98b8;
+              margin-right: 8px;
+              vertical-align: middle;
+              transition: background 0.3s;
+            "
+            title="Status da API: Verificando..."
+          ></div>
           <div class="last-update" id="lastUpdate">Loading...</div>
         </div>
       </header>
@@ -614,17 +628,6 @@
                   border-radius: 4px;
                   border: 1px solid #2a3650;
                   width: 220px;
-                "
-              />
-              <input
-                type="text"
-                id="newHostCommunity"
-                placeholder="Community (ex: public)"
-                style="
-                  padding: 6px;
-                  border-radius: 4px;
-                  border: 1px solid #2a3650;
-                  width: 120px;
                 "
               />
               <button class="selector-btn" onclick="addExternalHost()">
@@ -703,6 +706,8 @@
       let allHosts = [];
       let selectedHosts = new Set();
       let hostColors = {};
+      let hiddenHosts = new Set(); // Hosts ocultados pelo usuário
+      let apiStatus = "unknown"; // "online", "offline", "timeout", "unknown"
 
       function changeDataSource() {
         const selector = document.getElementById("dataSourceSelector");
@@ -884,18 +889,106 @@
         ],
       };
 
+      // Função helper para fazer fetch com timeout
+      async function fetchWithTimeout(url, options = {}, timeout = 10000) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+        try {
+          const response = await fetch(url, {
+            ...options,
+            signal: controller.signal,
+          });
+          clearTimeout(timeoutId);
+          return response;
+        } catch (error) {
+          clearTimeout(timeoutId);
+          if (error.name === "AbortError") {
+            throw new Error(
+              "TIMEOUT: A requisição demorou mais que " +
+                timeout / 1000 +
+                " segundos"
+            );
+          }
+          throw error;
+        }
+      }
+
+      // Verificar se erro é de conexão/timeout
+      function isConnectionError(error) {
+        const errorMessage = error.message || error.toString();
+        return (
+          errorMessage.includes("Failed to fetch") ||
+          errorMessage.includes("TIMEOUT") ||
+          errorMessage.includes("ERR_CONNECTION") ||
+          errorMessage.includes("NetworkError") ||
+          errorMessage.includes("ERR_NETWORK")
+        );
+      }
+
+      // Atualizar indicador visual de status da API
+      function updateApiStatusIndicator() {
+        const indicator = document.getElementById("apiStatusIndicator");
+        if (!indicator) return;
+
+        let color, title;
+        switch (apiStatus) {
+          case "online":
+            color = "#2ecc71";
+            title = "API Online";
+            break;
+          case "timeout":
+            color = "#f39c12";
+            title = "API com Timeout - Verifique a conexão";
+            break;
+          case "offline":
+            color = "#e74c3c";
+            title = "API Offline - Servidor não acessível";
+            break;
+          default:
+            color = "#8b98b8";
+            title = "Status da API: Verificando...";
+        }
+
+        indicator.style.background = color;
+        indicator.title = title;
+      }
+
       async function getHosts() {
         try {
-          const response = await fetch(`${SNMP_API_URL}/latest`);
+          const response = await fetchWithTimeout(
+            `${SNMP_API_URL}/latest`,
+            {},
+            8000 // 8 segundos de timeout
+          );
+
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+
           const data = await response.json();
+          apiStatus = "online";
+          updateApiStatusIndicator();
           return data.hosts || [];
         } catch (error) {
-          console.error("Get hosts error:", error);
+          console.warn("Get hosts error:", error.message || error);
 
-          // Se falhar (Mixed Content ou offline), usar dados mock
+          // Determinar tipo de erro
+          const errorMessage = error.message || error.toString();
+          if (errorMessage.includes("TIMEOUT")) {
+            apiStatus = "timeout";
+          } else if (isConnectionError(error)) {
+            apiStatus = "offline";
+          }
+          updateApiStatusIndicator();
+
+          // Se falhar (Mixed Content, timeout ou offline), usar dados mock
           const isGitHubPages = window.location.hostname.includes("github.io");
-          if (isGitHubPages || error.message.includes("Failed to fetch")) {
-            console.warn("Using mock data - API unavailable");
+          if (isGitHubPages || isConnectionError(error)) {
+            console.warn(
+              "Using mock data - API unavailable:",
+              error.message || error
+            );
             return mockData.hosts;
           }
           return [];
@@ -904,17 +997,24 @@
 
       async function getHistory(metric) {
         try {
-          const response = await fetch(
-            `${SNMP_API_URL}/history?range=${currentTimeRange}&metric=${metric}`
+          const response = await fetchWithTimeout(
+            `${SNMP_API_URL}/history?range=${currentTimeRange}&metric=${metric}`,
+            {},
+            8000 // 8 segundos de timeout
           );
+
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+
           const data = await response.json();
           return data.data || [];
         } catch (error) {
-          console.error("Get history error:", error);
+          console.warn("Get history error:", error.message || error);
 
           // Se falhar, gerar dados mock para o gráfico
           const isGitHubPages = window.location.hostname.includes("github.io");
-          if (isGitHubPages || error.message.includes("Failed to fetch")) {
+          if (isGitHubPages || isConnectionError(error)) {
             return generateMockHistory(metric);
           }
           return [];
@@ -1033,6 +1133,8 @@
           const preferences = {
             selectedHosts: Array.from(selectedHosts),
             hostColors: hostColors,
+            hiddenHosts: Array.from(hiddenHosts),
+            externalHosts: externalHosts,
           };
           localStorage.setItem("fcaps_host_prefs", JSON.stringify(preferences));
         } catch (error) {
@@ -1064,6 +1166,19 @@
                 }
               });
             }
+
+            // Restore hidden hosts
+            if (preferences.hiddenHosts) {
+              hiddenHosts.clear();
+              preferences.hiddenHosts.forEach((hostName) => {
+                hiddenHosts.add(hostName);
+              });
+            }
+
+            // Restore external hosts
+            if (preferences.externalHosts) {
+              externalHosts = preferences.externalHosts;
+            }
           }
         } catch (error) {
           console.error("Error loading host preferences:", error);
@@ -1075,21 +1190,39 @@
 
       function addExternalHost() {
         const ip = document.getElementById("newHostInput").value.trim();
-        const community =
-          document.getElementById("newHostCommunity").value.trim() || "public";
         if (!ip) return alert("Informe o IP ou hostname do host!");
         // Adiciona ao array local
-        externalHosts.push({ host: ip, name: ip, community });
+        externalHosts.push({ host: ip, name: ip });
         document.getElementById("newHostInput").value = "";
-        document.getElementById("newHostCommunity").value = "";
+        saveHostPreferences();
         renderExternalHosts();
+        renderHostSelector(allHosts);
         // Aqui deveria chamar a API para persistir no coletor
       }
 
       function removeExternalHost(idx) {
+        const hostToRemove = externalHosts[idx];
+        // Se o host estava selecionado, removê-lo da seleção
+        selectedHosts.delete(hostToRemove.host);
         externalHosts.splice(idx, 1);
+        saveHostPreferences();
         renderExternalHosts();
-        // Aqui deveria chamar a API para remover do coletor
+        renderHostSelector(allHosts);
+        updateCharts();
+      }
+
+      function hideHost(hostId) {
+        hiddenHosts.add(hostId);
+        selectedHosts.delete(hostId);
+        saveHostPreferences();
+        renderHostSelector(allHosts);
+        updateCharts();
+      }
+
+      function restoreHost(hostId) {
+        hiddenHosts.delete(hostId);
+        saveHostPreferences();
+        renderHostSelector(allHosts);
       }
 
       function renderExternalHosts() {
@@ -1134,7 +1267,12 @@
         // Adiciona hosts externos à lista de seleção
         const allHostsWithExternal = hosts.concat(externalHosts);
 
-        selector.innerHTML = allHostsWithExternal
+        // Filtrar hosts ocultados
+        const visibleHosts = allHostsWithExternal.filter(
+          (host) => !hiddenHosts.has(host.host)
+        );
+
+        selector.innerHTML = visibleHosts
           .map((host, idx) => {
             const isChecked = selectedHosts.has(host.host);
             const color =
@@ -1157,10 +1295,90 @@
                 ></div>
                 <span>${host.name}</span>
               </label>
+              <button 
+                onclick="hideHost('${host.host}')" 
+                style="
+                  background: #e74c3c; 
+                  color: #fff; 
+                  border: none; 
+                  border-radius: 3px; 
+                  padding: 4px 8px; 
+                  cursor: pointer; 
+                  font-size: 11px;
+                  margin-left: auto;
+                  transition: background 0.2s;
+                "
+                onmouseover="this.style.background='#c0392b'"
+                onmouseout="this.style.background='#e74c3c'"
+                title="Ocultar host"
+              >✕</button>
             </div>
           `;
           })
           .join("");
+
+        // Mostrar hosts ocultados se houver
+        if (hiddenHosts.size > 0) {
+          const hiddenList = document.getElementById("hiddenHostsList");
+          if (!hiddenList) {
+            const hiddenContainer = document.createElement("div");
+            hiddenContainer.id = "hiddenHostsList";
+            hiddenContainer.style.cssText =
+              "margin-top: 10px; padding-top: 10px; border-top: 1px solid #2a3650;";
+            hiddenContainer.innerHTML = `
+              <div style="font-size: 12px; color: #8b98b8; margin-bottom: 8px;">Hosts ocultos:</div>
+              <div id="hiddenHostsContent"></div>
+            `;
+            selector.parentNode.appendChild(hiddenContainer);
+          }
+          const hiddenContent = document.getElementById("hiddenHostsContent");
+          const hiddenHostsArray = Array.from(hiddenHosts);
+          hiddenContent.innerHTML = hiddenHostsArray
+            .map((hostName) => {
+              // Tentar encontrar o host na lista atual ou usar o nome do host
+              const host =
+                allHostsWithExternal.find((h) => h.host === hostName) ||
+                allHosts.find((h) => h.host === hostName);
+              const displayName = host ? host.name : hostName;
+              return `
+                <span style="
+                  background: #0f1829; 
+                  color: #8b98b8; 
+                  padding: 4px 10px; 
+                  border-radius: 4px; 
+                  margin-right: 8px; 
+                  margin-bottom: 6px;
+                  display: inline-block;
+                  font-size: 12px;
+                ">
+                  ${displayName}
+                  <button 
+                    onclick="restoreHost('${hostName}')" 
+                    style="
+                      background: #2ecc71; 
+                      color: #fff; 
+                      border: none; 
+                      border-radius: 2px; 
+                      padding: 2px 6px; 
+                      margin-left: 6px; 
+                      cursor: pointer; 
+                      font-size: 10px;
+                      transition: background 0.2s;
+                    "
+                    onmouseover="this.style.background='#27ae60'"
+                    onmouseout="this.style.background='#2ecc71'"
+                    title="Restaurar host"
+                  >Restaurar</button>
+                </span>
+              `;
+            })
+            .join("");
+        } else {
+          const hiddenList = document.getElementById("hiddenHostsList");
+          if (hiddenList) {
+            hiddenList.remove();
+          }
+        }
       }
 
       function getSelectedHosts() {
@@ -1688,11 +1906,25 @@
             throw new Error("No hosts found in SNMP database");
           }
 
+          // Filtrar hosts baseado na fonte de dados selecionada
+          const isCloudSource = SNMP_API_URL.includes("137.131.133.165");
+          const filteredHosts = allHosts.filter((host) => {
+            const isCloudHost = (
+              host.host === "oracle-cloud" ||
+              host.host === "api-daora" ||
+              host.host === "instance-20251116-2130"
+            );
+
+            // Se fonte é nuvem, mostrar apenas hosts da nuvem
+            // Se fonte é local, mostrar apenas hosts locais
+            return isCloudSource ? isCloudHost : !isCloudHost;
+          });
+
           // Carregar preferências salvas primeiro
           loadHostPreferences();
 
           // Limpar hosts obsoletos do localStorage (api-foda, instance-*, etc)
-          const currentHostNames = allHosts.map((h) => h.host);
+          const currentHostNames = localHosts.map((h) => h.host);
           const obsoleteHosts = ["api-foda", "instance-20251116-2130"];
           let needsCleanup = false;
 
@@ -1724,17 +1956,25 @@
             console.log("Cleaned up obsolete hosts from preferences");
           }
 
-          // Renderizar seletor de hosts
-          renderHostSelector(allHosts);
+          // Renderizar hosts externos
+          renderExternalHosts();
 
-          // Obter hosts selecionados
-          const selectedHostsList = getSelectedHosts();
+          // Renderizar seletor de hosts
+          renderHostSelector(localHosts);
+
+          // Obter hosts selecionados (usando localHosts)
+          const selectedHostsList = localHosts.filter((host) =>
+            selectedHosts.has(host.host)
+          );
 
           // Calcular estatísticas
           updateStats(selectedHostsList);
 
-          // Renderizar cards de todos os hosts (não apenas selecionados)
-          document.getElementById("hostsGrid").innerHTML = allHosts
+          // Renderizar cards de todos os hosts visíveis (não ocultados)
+          const visibleHostsForCards = localHosts.filter(
+            (h) => !hiddenHosts.has(h.host)
+          );
+          document.getElementById("hostsGrid").innerHTML = visibleHostsForCards
             .map((h) => renderHostCard(h))
             .join("");
 
@@ -1748,9 +1988,31 @@
         } catch (error) {
           console.error("Load data error:", error);
           document.getElementById("loading").style.display = "none";
-          document.getElementById("errorMessage").textContent =
-            "⚠️ Aguardando dados SNMP... O coletor pode estar iniciando pela primeira vez. Atualize a página em alguns segundos.";
+
+          // Mensagem de erro mais informativa baseada no status da API
+          let errorMsg = "⚠️ Erro ao carregar dados SNMP.";
+
+          if (apiStatus === "timeout") {
+            errorMsg = `⏱️ Timeout: A API não respondeu em 8 segundos. Verifique se o servidor ${SNMP_API_URL} está online e acessível.`;
+          } else if (apiStatus === "offline") {
+            errorMsg = `🔴 Conexão perdida: Não foi possível conectar ao servidor ${SNMP_API_URL}. Verifique:\n• Se o servidor está rodando\n• Se a URL está correta\n• Se há firewall bloqueando a conexão\n• Se o servidor está acessível na rede`;
+          } else {
+            errorMsg = `⚠️ Erro ao carregar dados. API: ${SNMP_API_URL}\nO coletor pode estar iniciando ou a API está offline.`;
+          }
+
+          // Se estiver usando dados mock, avisar o usuário
+          if (allHosts.length > 0 && allHosts[0].host === "nginx-web") {
+            errorMsg +=
+              "\n\nℹ️ Mostrando dados de exemplo (mock) enquanto a API não responde.";
+          }
+
+          document.getElementById("errorMessage").textContent = errorMsg;
           document.getElementById("errorMessage").style.display = "block";
+
+          // Tentar mostrar dashboard mesmo com erro se houver dados mock
+          if (allHosts.length > 0) {
+            document.getElementById("dashboard").style.display = "block";
+          }
         }
       }
 
