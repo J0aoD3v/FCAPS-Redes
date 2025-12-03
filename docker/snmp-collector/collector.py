@@ -16,7 +16,9 @@ HOSTS = [
     {'name': 'nginx-web', 'ip': 'nginx-web', 'community': 'public'},
     {'name': 'python-app', 'ip': 'python-app', 'community': 'public'},
     {'name': 'alpine-host', 'ip': 'alpine-host', 'community': 'public'},
-    {'name': 'snmp-collector', 'ip': 'localhost', 'community': 'public'}  # Auto-monitoramento
+    {'name': 'snmp-collector', 'ip': 'localhost', 'community': 'public'},  # Auto-monitoramento
+    {'name': 'oracle-cloud', 'ip': '137.131.133.165', 'community': 'public'},  # Oracle Cloud 1
+    {'name': 'api-foda', 'ip': '136.248.121.230', 'community': 'public'}  # Oracle Cloud 2
 ]
 
 # OIDs SNMP (usando OIDs básicos que existem em todos os containers)
@@ -217,7 +219,9 @@ def main():
                 metrics = collect_metrics(host)
                 store_metrics(host['name'], metrics)
             except Exception as e:
+                import traceback
                 print(f"  ERROR collecting {host['name']}: {e}")
+                traceback.print_exc()
         
         # Limpeza periódica (a cada 60 coletas = ~1 hora)
         if iteration % 60 == 0:
