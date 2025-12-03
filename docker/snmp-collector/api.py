@@ -18,7 +18,24 @@ class APIHandler(BaseHTTPRequestHandler):
         path = parsed_path.path
         params = parse_qs(parsed_path.query)
         
-        # CORS headers
+        # Servir index.html na raiz
+        if path == '/' or path == '/index.html':
+            try:
+                with open('/app/dashboard.html', 'r', encoding='utf-8') as f:
+                    content = f.read()
+                self.send_response(200)
+                self.send_header('Content-type', 'text/html; charset=utf-8')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(content.encode('utf-8'))
+            except Exception as e:
+                self.send_response(404)
+                self.send_header('Content-type', 'text/plain')
+                self.end_headers()
+                self.wfile.write(f'Dashboard not found: {e}'.encode())
+            return
+        
+        # API endpoints
         self.send_response(200)
         self.send_header('Content-type', 'application/json')
         self.send_header('Access-Control-Allow-Origin', '*')
