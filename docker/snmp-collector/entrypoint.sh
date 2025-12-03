@@ -5,6 +5,24 @@ echo "================================"
 echo "  FCAPS SNMP Collector Service"
 echo "================================"
 
+# Criar diretórios necessários
+mkdir -p /data /etc/snmp /var/net-snmp
+
+# Configurar SNMP daemon para auto-monitoramento
+echo "Configuring SNMP daemon..."
+cat > /etc/snmp/snmpd.conf << 'EOF'
+rocommunity public
+syslocation "SNMP Collector Container"
+syscontact "fcaps-monitoring@localhost"
+sysservices 72
+master agentx
+agentaddress udp:161
+EOF
+
+# Iniciar SNMP daemon
+echo "Starting SNMP daemon..."
+/usr/sbin/snmpd -Lsd -Lf /dev/null -p /var/run/snmpd.pid
+
 # Criar diretório de dados
 mkdir -p /data
 

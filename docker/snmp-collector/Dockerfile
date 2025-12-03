@@ -2,8 +2,18 @@ FROM python:3.11-alpine
 
 WORKDIR /app
 
-# Instalar dependências do sistema (easysnmp precisa de net-snmp-dev)
-RUN apk add --no-cache gcc musl-dev libffi-dev net-snmp-dev net-snmp-libs
+# Instalar dependências do sistema
+# gcc, musl-dev, libffi-dev: compilação do easysnmp
+# net-snmp-dev, net-snmp-libs: bibliotecas SNMP
+# net-snmp, net-snmp-tools: daemon snmpd e ferramentas (snmpwalk, snmpget)
+RUN apk add --no-cache \
+    gcc \
+    musl-dev \
+    libffi-dev \
+    net-snmp-dev \
+    net-snmp-libs \
+    net-snmp \
+    net-snmp-tools
 
 # Copiar requirements
 COPY requirements.txt .

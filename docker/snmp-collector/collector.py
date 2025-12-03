@@ -15,7 +15,8 @@ DB_PATH = '/data/snmp_metrics.db'
 HOSTS = [
     {'name': 'nginx-web', 'ip': 'nginx-web', 'community': 'public'},
     {'name': 'python-app', 'ip': 'python-app', 'community': 'public'},
-    {'name': 'alpine-host', 'ip': 'alpine-host', 'community': 'public'}
+    {'name': 'alpine-host', 'ip': 'alpine-host', 'community': 'public'},
+    {'name': 'snmp-collector', 'ip': 'localhost', 'community': 'public'}  # Auto-monitoramento
 ]
 
 # OIDs SNMP (usando OIDs básicos que existem em todos os containers)
