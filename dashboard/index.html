@@ -633,23 +633,23 @@
 
       function getMaxTicks() {
         const ticks = {
-          "5m": 10,
-          "15m": 12,
-          "30m": 15,
-          "1h": 12,
-          "3h": 18,
-          "6h": 24,
-          "12h": 24,
-          "24h": 24,
-          "2d": 20,
-          "7d": 14,
-          "30d": 15,
-          "3mo": 12,
-          "6mo": 12,
-          "1y": 12,
-          "2y": 12,
+          "5m": 6,
+          "15m": 6,
+          "30m": 7,
+          "1h": 7,
+          "3h": 9,
+          "6h": 10,
+          "12h": 12,
+          "24h": 12,
+          "2d": 12,
+          "7d": 10,
+          "30d": 10,
+          "3mo": 8,
+          "6mo": 8,
+          "1y": 8,
+          "2y": 8,
         };
-        return ticks[currentTimeRange] || 12;
+        return ticks[currentTimeRange] || 8;
       }
 
       // Dados SNMP coletados do Zabbix Server
@@ -923,13 +923,27 @@
           }
         });
 
-        // Agrupar dados de Uptime (converter para horas)
+        // Agrupar dados de Uptime (converter para horas relativas)
+        // Calcular uptime base (primeiro valor) por host para mostrar crescimento relativo
+        const uptimeBase = {};
+        hosts.forEach((host) => {
+          const hostUptimes = uptimeHistory.filter((e) => e.host === host.host);
+          if (hostUptimes.length > 0) {
+            uptimeBase[host.host] = Math.min(
+              ...hostUptimes.map((e) => e.value)
+            );
+          }
+        });
+
         uptimeHistory.forEach((entry) => {
           if (hostData[entry.host]) {
             const idx = timestampIndex[entry.timestamp];
             if (idx !== undefined) {
+              // Uptime relativo: diferença desde o primeiro valor (mostra crescimento)
+              const relativeUptime =
+                entry.value - (uptimeBase[entry.host] || 0);
               hostData[entry.host].uptime[idx] = parseFloat(
-                (entry.value / 3600).toFixed(2)
+                (relativeUptime / 3600).toFixed(2)
               );
             }
           }
@@ -971,6 +985,16 @@
                 backgroundColor: "#1a2332",
                 borderColor: "#2a3650",
                 borderWidth: 1,
+                callbacks: {
+                  label: function (context) {
+                    return (
+                      context.dataset.label +
+                      ": " +
+                      Math.round(context.parsed.y) +
+                      " %"
+                    );
+                  },
+                },
               },
             },
             scales: {
@@ -980,7 +1004,6 @@
                   color: "#8b98b8",
                   maxTicksLimit: getMaxTicks(),
                   autoSkip: true,
-                  source: "auto",
                   maxRotation: 0,
                   minRotation: 0,
                 },
@@ -1035,6 +1058,16 @@
                 backgroundColor: "#1a2332",
                 borderColor: "#2a3650",
                 borderWidth: 1,
+                callbacks: {
+                  label: function (context) {
+                    return (
+                      context.dataset.label +
+                      ": " +
+                      Math.round(context.parsed.y) +
+                      " %"
+                    );
+                  },
+                },
               },
             },
             scales: {
@@ -1044,7 +1077,6 @@
                   color: "#8b98b8",
                   maxTicksLimit: getMaxTicks(),
                   autoSkip: true,
-                  source: "auto",
                   maxRotation: 0,
                   minRotation: 0,
                 },
@@ -1119,7 +1151,6 @@
                   color: "#8b98b8",
                   maxTicksLimit: getMaxTicks(),
                   autoSkip: true,
-                  source: "auto",
                   maxRotation: 0,
                   minRotation: 0,
                 },
@@ -1215,8 +1246,8 @@
         }
       }
 
-      // Auto-refresh a cada 30 segundos
-      setInterval(loadData, 30000);
+      // Auto-refresh a cada 60 segundos (sincronizado com coleta SNMP)
+      setInterval(loadData, 60000);
 
       // Carrega dados ao iniciar
       loadData();
