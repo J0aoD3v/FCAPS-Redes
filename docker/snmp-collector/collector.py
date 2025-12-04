@@ -30,7 +30,7 @@ HOSTS = [
     {'name': 'nginx-web', 'ip': 'nginx-web', 'community': 'public'},
     {'name': 'python-app', 'ip': 'python-app', 'community': 'public'},
     {'name': 'alpine-host', 'ip': 'alpine-host', 'community': 'public'},
-    {'name': 'snmp-collector', 'ip': 'localhost', 'community': 'public'},  # Auto-monitoramento
+    {'name': 'collector-pc', 'ip': 'localhost', 'community': 'public'},  # Auto-monitoramento
     {'name': 'oracle-cloud', 'ip': '137.131.133.165', 'community': 'public'},  # Oracle Cloud 1
     {'name': 'api-daora', 'ip': '136.248.121.230', 'community': 'public'}  # Oracle Cloud 2
 ]

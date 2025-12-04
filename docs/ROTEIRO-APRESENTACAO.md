@@ -1,26 +1,98 @@
-# Roteiro de Apresentação - FCAPS com Zabbix
+# Roteiro de Apresentação - FCAPS Redes: Experimentos, Métricas e Resultados
 
 **Apresentação:** 04/12/2025  
 **Tempo estimado:** 15-20 minutos
 
 ---
 
-## 1. Introdução (2 min)
+## 1. Introdução
 
-### Objetivo do Projeto
-
-- Implementar sistema de monitoramento baseado no modelo FCAPS
-- Gerenciar redes de forma proativa
-- Coletar métricas via SNMP (OIDs MIB-II)
-
-### Tecnologias Utilizadas
-
-- **Zabbix 7.2:** Plataforma de monitoramento open-source
-- **Docker:** Containerização dos serviços
-- **WSL2:** Ambiente Linux no Windows
-- **Alpine Linux:** Imagens leves (5-10x menores que Ubuntu)
+### Objetivo
+- Demonstrar na prática um sistema de monitoramento FCAPS, usando Zabbix, Docker, SNMP, Python e diversas tecnologias modernas.
+- Mostrar experimentos reais, desafios e resultados obtidos em ambientes locais e na nuvem.
 
 ---
+
+## 2. Experimentos Práticos
+
+
+### Testes Locais e Oracle Cloud
+- Inicialmente, rodei aplicações locais em 3 containers distintos:
+  - Uma aplicação Python dedicada à coleta e API.
+  - Um site estático hospedado via Nginx.
+  - Um host Alpine Linux para monitoramento SNMP.
+- Posteriormente, evoluí os testes para 2 máquinas virtuais de 1GB RAM cada, na nuvem Oracle Cloud, ambas rodando Oracle Linux 9, simulando ambiente real de produção.
+
+
+### Tecnologias e Ferramentas
+- **Banco de dados:** SQLite (MySQL Lite)
+- **Backend/API:** Python (Flask)
+- **Monitoramento:**
+  - Inicialmente utilizei o Zabbix 7.2 para monitoramento centralizado.
+  - Evoluí para uso do agente Net-SNMP junto com Easy SNMP, implementando coleta direta via protocolo SNMP v2c.
+- **Dashboard:** HTML, CSS customizado
+- **Webserver:** Nginx
+- **Orquestração:** Docker Compose
+- **Ambiente:** WSL2, Alpine Linux (imagens leves)
+
+### Infraestrutura
+- Separei os serviços em containers: nginx-web, python-app, alpine-host, zabbix-server.
+- Usei volumes Docker para persistência dos dados.
+- Testei a escalabilidade e a comunicação entre API, banco e agentes SNMP.
+
+---
+
+## 3. Métricas Reais Coletadas
+
+Exemplo da base de dados:
+```json
+{
+  "hosts": [
+    {
+      "host": "api-daora",
+      "cpu": 33.0,
+      "memory": 36.0,
+      "processes": 38,
+      "uptime": 42745,
+      "ifOperStatus": null,
+      "ifInErrors": null,
+      "ifOutErrors": null,
+      "sysname": "api-daora"
+    },
+    {
+      "host": "collector-cloud",
+      "cpu": 34.0,
+      "memory": 35.0,
+      "processes": 30,
+      "uptime": 62,
+      "ifOperStatus": 1,
+      "ifInErrors": 0,
+      "ifOutErrors": 0,
+      "sysname": "collector-pc"
+    }
+  ]
+}
+```
+Essas métricas incluem: CPU, memória, processos, uptime, status de interfaces, erros SNMP, entre outros.
+
+---
+
+## 4. Resultados e Validações
+- Validei a coleta e visualização das métricas via dashboard web customizada e pelo Zabbix.
+- Testei persistência dos dados, comunicação entre containers e APIs, e monitorei o funcionamento dos agentes SNMP.
+- Realizei testes de carga, simulei falhas e analisei o comportamento do sistema em diferentes cenários.
+
+---
+
+## 5. Aprendizados e Conclusão
+- O ambiente permite monitorar múltiplos hosts e aplicações, locais e em nuvem, com flexibilidade para expandir métricas e integrações.
+- Aprendi sobre otimização de recursos, automação com Docker, e integração de múltiplas tecnologias.
+- Zabbix mostrou-se robusto, mas exige configuração detalhada e curva de aprendizado.
+
+---
+
+## 6. Arquitetura do Sistema
+...existing code...
 
 ## 2. Arquitetura do Sistema (3 min)
 

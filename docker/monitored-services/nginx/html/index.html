@@ -92,24 +92,7 @@
         <p><strong>Monitorado por:</strong> Zabbix Agent 2</p>
       </div>
 
-      <div class="metrics">
-        <div class="metric">
-          <div class="metric-value" id="uptime">Carregando...</div>
-          <div class="metric-label">Uptime (SNMP)</div>
-        </div>
-        <div class="metric">
-          <div class="metric-value" id="cpu">-</div>
-          <div class="metric-label">CPU %</div>
-        </div>
-        <div class="metric">
-          <div class="metric-value" id="memory">-</div>
-          <div class="metric-label">Memória %</div>
-        </div>
-        <div class="metric">
-          <div class="metric-value" id="processes">-</div>
-          <div class="metric-label">Processos</div>
-        </div>
-      </div>
+      <div id="hosts-list"></div>
 
       <div class="info" style="margin-top: 20px">
         <h2>🔍 Métricas Monitoradas via SNMP</h2>
@@ -123,53 +106,57 @@
 
     <script>
       const SNMP_API_URL = "http://localhost:8090/api";
-      const HOST_NAME = "nginx-web";
 
       function formatUptime(seconds) {
         const days = Math.floor(seconds / 86400);
         const hours = Math.floor((seconds % 86400) / 3600);
         const minutes = Math.floor((seconds % 3600) / 60);
         const secs = seconds % 60;
+        if (days > 0) return `${days}d ${hours}h ${minutes}m`;
+        if (hours > 0) return `${hours}h ${minutes}m ${secs}s`;
+        if (minutes > 0) return `${minutes}m ${secs}s`;
+        return `${secs}s`;
+      }
 
-        if (days > 0) {
-          return `${days}d ${hours}h ${minutes}m`;
-        } else if (hours > 0) {
-          return `${hours}h ${minutes}m ${secs}s`;
-        } else if (minutes > 0) {
-          return `${minutes}m ${secs}s`;
-        } else {
-          return `${secs}s`;
-        }
+      function renderHostCard(host) {
+        const metrics = Object.entries(host)
+          .filter(([key]) => key !== "host" && key !== "sysname" && key !== "timestamp")
+          .map(([key, value]) => {
+            let displayValue = value;
+            if (key === "uptime") displayValue = formatUptime(value || 0);
+            else if (typeof value === "number" && key !== "processes") displayValue = Math.round(value);
+            else if (value === null || value === undefined) displayValue = "-";
+            return `<div class="metric"><div class="metric-label">${key}</div><div class="metric-value">${displayValue}</div></div>`;
+          })
+          .join("");
+
+        return `
+          <div class="info" style="margin-top:20px">
+            <h2>🔎 Host: ${host.host}</h2>
+            <p><strong>Nome:</strong> ${host.sysname || host.host}</p>
+            <p><strong>Timestamp:</strong> ${host.timestamp || "-"}</p>
+            <div class="metrics" style="margin-top:10px">${metrics}</div>
+          </div>
+        `;
       }
 
       async function loadMetrics() {
         try {
           const response = await fetch(`${SNMP_API_URL}/latest`);
           const data = await response.json();
-
-          const host = data.hosts.find((h) => h.host === HOST_NAME);
-
-          if (host) {
-            document.getElementById("uptime").textContent = formatUptime(
-              host.uptime || 0
-            );
-            document.getElementById("cpu").textContent =
-              Math.round(host.cpu || 0) + "%";
-            document.getElementById("memory").textContent =
-              Math.round(host.memory || 0) + "%";
-            document.getElementById("processes").textContent =
-              host.processes || 0;
-          } else {
-            document.getElementById("uptime").textContent =
-              "Host não encontrado";
+          const hosts = data.hosts || [];
+          const hostsList = document.getElementById("hosts-list");
+          if (hosts.length === 0) {
+            hostsList.innerHTML = `<div class="status">Nenhum host encontrado</div>`;
+            return;
           }
+          hostsList.innerHTML = hosts.map(renderHostCard).join("");
         } catch (error) {
           console.error("Erro ao carregar métricas:", error);
-          document.getElementById("uptime").textContent = "Erro na API";
+          document.getElementById("hosts-list").innerHTML = `<div class="status">Erro na API</div>`;
         }
       }
 
-      // Atualizar a cada 10 segundos (alinhado com coleta SNMP)
       setInterval(loadMetrics, 10000);
       loadMetrics();
     </script>

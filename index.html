@@ -1909,22 +1909,38 @@
           // Filtrar hosts baseado na fonte de dados selecionada
           const isCloudSource = SNMP_API_URL.includes("137.131.133.165");
           const filteredHosts = allHosts.filter((host) => {
-            const isCloudHost = (
+            // Definir quais hosts são exclusivamente locais
+            const isLocalOnlyHost = (
+              host.host === "nginx-web" ||
+              host.host === "python-app" ||
+              host.host === "alpine-host"
+            );
+            
+            // Definir quais hosts são exclusivamente da nuvem
+            const isCloudOnlyHost = (
               host.host === "oracle-cloud" ||
               host.host === "api-daora" ||
               host.host === "instance-20251116-2130"
             );
+            
+            // Collectors específicos para cada ambiente
+            const isCollectorPC = (host.host === "collector-pc");
+            const isCollectorCloud = (host.host === "collector-cloud");
 
-            // Se fonte é nuvem, mostrar apenas hosts da nuvem
-            // Se fonte é local, mostrar apenas hosts locais
-            return isCloudSource ? isCloudHost : !isCloudHost;
+            // Se fonte é nuvem, mostrar apenas hosts da nuvem ou collector-cloud
+            // Se fonte é local, mostrar apenas hosts locais ou collector-pc
+            if (isCloudSource) {
+              return isCloudOnlyHost || isCollectorCloud;
+            } else {
+              return isLocalOnlyHost || isCollectorPC;
+            }
           });
 
           // Carregar preferências salvas primeiro
           loadHostPreferences();
 
           // Limpar hosts obsoletos do localStorage (api-foda, instance-*, etc)
-          const currentHostNames = localHosts.map((h) => h.host);
+          const currentHostNames = allHosts.map((h) => h.host);
           const obsoleteHosts = ["api-foda", "instance-20251116-2130"];
           let needsCleanup = false;
 
@@ -1960,10 +1976,10 @@
           renderExternalHosts();
 
           // Renderizar seletor de hosts
-          renderHostSelector(localHosts);
+          renderHostSelector(filteredHosts);
 
-          // Obter hosts selecionados (usando localHosts)
-          const selectedHostsList = localHosts.filter((host) =>
+          // Obter hosts selecionados (usando filteredHosts)
+          const selectedHostsList = filteredHosts.filter((host) =>
             selectedHosts.has(host.host)
           );
 
@@ -1971,7 +1987,7 @@
           updateStats(selectedHostsList);
 
           // Renderizar cards de todos os hosts visíveis (não ocultados)
-          const visibleHostsForCards = localHosts.filter(
+          const visibleHostsForCards = filteredHosts.filter(
             (h) => !hiddenHosts.has(h.host)
           );
           document.getElementById("hostsGrid").innerHTML = visibleHostsForCards
