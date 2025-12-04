@@ -99,23 +99,30 @@ Essas métricas incluem: CPU, memória, processos, uptime, status de interfaces,
 ### Componentes
 
 ```
-┌─────────────────────────────────────────┐
-│         Docker Network (bridge)         │
-│         172.20.0.0/16                   │
-│                                         │
-│  ┌──────────────┐                       │
-│  │ Zabbix Server│ :8080 :10051         │
-│  │ + MySQL DB   │ (Appliance)          │
-│  └──────┬───────┘                       │
-│         │                               │
-│         ├──────────┬──────────┬────────┤
-│         │          │          │        │
-│  ┌──────▼─────┐ ┌──▼────────┐ ┌───▼───┐│
-│  │ nginx-web  │ │python-app │ │alpine-││
-│  │ :8081      │ │ :5000     │ │ host  ││
-│  │ + Agent    │ │ + Agent   │ │+Agent ││
-│  └────────────┘ └───────────┘ └───────┘│
-└─────────────────────────────────────────┘
+
+
+
+
+┌───────────────┬───────────────┬───────────────┬───────────────┐
+│  python-app   │  nginx-web    │ alpine-host   │ live-server   │
+│  :5000        │  :8081        │ SNMP Agent    │ :5500         │
+│  API/Coleta   │  Dashboard    │ Linux/Net-SNMP│ HTML/CSS      │
+│  SNMP v2c     │  HTML/CSS     │ Easy SNMP     │ Dashboard     │
+└───────────────┴───────────────┴───────────────┴───────────────┘
+
+Ambiente local: containers Docker integrados (cada serviço em um quadrado separado, incluindo um live-server para servir o HTML da dashboard sem complicação de API).
+
+**Limite de recursos:** Docker limitado a 4GB de RAM, mas o uso real ficou em torno de 400MB no máximo.
+
+┌───────────────┐   ┌───────────────┐
+│ VM Oracle 1   │   │ VM Oracle 2   │
+│ Oracle Linux  │   │ Oracle Linux  │
+│ 1GB RAM       │   │ 1GB RAM       │
+│ Net-SNMP      │   │ Easy SNMP     │
+│ Python App    │   │ Dashboard     │
+└───────────────┘   └───────────────┘
+
+Ambiente nuvem: 2 VMs Oracle Linux 9, cada uma com agente SNMP e aplicações Python para coleta e dashboard.
 ```
 
 ### Por que 4 containers?
